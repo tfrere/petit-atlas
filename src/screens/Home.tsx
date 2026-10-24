@@ -71,32 +71,19 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
         gridTemplateColumns: { md: 'minmax(0, 1fr) 500px' },
       }}
     >
-      <Box
-        sx={{
-          position: 'relative',
-          height: { xs: 'min(33dvh, 320px)', md: '100%' },
-          minHeight: { xs: 230, md: 0 },
-        }}
-      >
+      <Box sx={{ position: 'relative', height: { md: '100%' }, pt: { xs: 1.5, md: 0 } }}>
         <Box
           sx={{
-            position: 'absolute',
-            inset: 0,
-            WebkitMaskImage: {
-              xs: 'linear-gradient(to bottom, #000 60%, transparent 100%)',
-              md: 'linear-gradient(to right, #000 82%, transparent 100%)',
-            },
-            maskImage: {
-              xs: 'linear-gradient(to bottom, #000 60%, transparent 100%)',
-              md: 'linear-gradient(to right, #000 82%, transparent 100%)',
-            },
+            position: { xs: 'relative', md: 'absolute' },
+            inset: { md: 0 },
+            aspectRatio: { xs: '2.1 / 1', md: 'auto' },
+            px: { xs: 0.5, md: 0 },
           }}
         >
           <WorldMap
             world={world}
             region={config.region}
             interactive={false}
-            cover
             vignette={false}
             view={{ key: config.region }}
           />
@@ -104,10 +91,11 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
 
         <Box
           sx={{
-            position: 'absolute',
+            position: { xs: 'relative', md: 'absolute' },
             left: 0,
             right: 0,
-            bottom: { xs: 4, md: 0 },
+            bottom: 0,
+            mt: { xs: 0.5, md: 0 },
             px: { xs: 3, md: 7 },
             pb: { md: 7 },
             textAlign: { xs: 'center', md: 'left' },
