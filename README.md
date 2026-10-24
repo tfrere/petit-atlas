@@ -42,3 +42,13 @@ Pour ajouter un type de question plus tard (vents, villes…), il suffit d'ajout
 ## Déploiement
 
 Le workflow `.github/workflows/deploy.yml` construit et publie sur GitHub Pages à chaque push sur `main`. Dans les réglages du dépôt GitHub, choisir **Pages → Source : GitHub Actions**. Le build utilise des chemins relatifs (`base: './'`) : il fonctionne quel que soit le nom du dépôt.
+
+### Hugging Face Spaces
+
+Le jeu est statique : il peut être publié tel quel sur un Space `static`.
+
+```bash
+HF_TOKEN=hf_xxx npm run deploy:hf -- <utilisateur-ou-org>/<nom-du-space>
+```
+
+Le script construit le projet, ajoute l'en-tête de Space (`hf/README.md`) et envoie le tout avec la CLI `hf`. Le token doit avoir un droit d'écriture.
