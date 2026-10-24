@@ -15,8 +15,8 @@ export const tokens = {
   wrong: '#a23b3b',
   target: '#cf7e50',
   selected: '#e2b45e',
-  dim: '#e0dac8',
-  land: ['#f0e4c0', '#e1e3c2', '#eed5b9', '#e6dcc2', '#d6dfd0'],
+  dim: '#dcd6c4',
+  land: '#f1e6c6',
 }
 
 export const fontDisplay = '"Cormorant Garamond", "Iowan Old Style", Georgia, serif'

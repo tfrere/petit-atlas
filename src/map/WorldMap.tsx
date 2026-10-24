@@ -60,8 +60,6 @@ interface Props {
   interactive?: boolean
   /** Affiche des pastilles tactiles autour des micro-États pour les rendre faciles à toucher. */
   tapRings?: boolean
-  /** Remplit tout le cadre, même en vue monde (bords du globe rognés). */
-  cover?: boolean
   /** Vue figée sur le globe entier : la région choisie est seulement mise en valeur (les autres pays s'estompent). */
   still?: boolean
   /** Léger reflet de lumière sur le globe, façon objet posé. */
@@ -72,6 +70,7 @@ interface Props {
 }
 
 const MAX_ZOOM = 120
+const WORLD_CENTER_LON = 15
 const MAP_LAT_MAX = 84
 const MAP_LAT_MIN = -58
 const PAN_GAIN_TOUCH = 1.8
@@ -206,7 +205,6 @@ export default function WorldMap({
   view,
   interactive = true,
   tapRings = false,
-  cover = false,
   vignette = true,
   still = false,
   sheen = false,
@@ -230,7 +228,7 @@ export default function WorldMap({
       .scale(k)
       .translate([w / 2 - (k * (ux0 + ux1)) / 2, h / 2 - (k * (uy0 + uy1)) / 2])
     const path = geoPath(projection).digits(2)
-    const shapes = world.shapes.map((s) => ({ id: s.id, d: path(s.feature) ?? '', colorIndex: s.colorIndex }))
+    const shapes = world.shapes.map((s) => ({ id: s.id, d: path(s.feature) ?? '' }))
     const x0 = w / 2 - (k * (ux1 - ux0)) / 2
     const x1 = w / 2 + (k * (ux1 - ux0)) / 2
     const y0 = h / 2 - (k * (uy1 - uy0)) / 2
@@ -255,6 +253,7 @@ export default function WorldMap({
       projection,
       path,
       sphereBounds,
+      minK: wrapX ? Math.max(1, h / (y1 - y0)) : 1,
       panExtent,
       wrapX,
       sphereWidth: x1 - x0,
@@ -325,10 +324,10 @@ export default function WorldMap({
       } else {
         const r = regionById(region)
         if (r.id === 'world') {
-          if (!cover) return zoomIdentity
-          const [[x0, y0], [x1, y1]] = geo.sphereBounds
-          const k = Math.max(1, h / geo.sphereHeight, w / geo.sphereWidth) * 1.12
-          const t = zoomIdentity.translate(w / 2 - (k * (x0 + x1)) / 2, h / 2 - (k * (y0 + y1)) / 2).scale(k)
+          const k = geo.minK
+          const cx = geo.projection([WORLD_CENTER_LON, 30])?.[0] ?? w / 2
+          const cy = (geo.sphereBounds[0][1] + geo.sphereBounds[1][1]) / 2
+          const t = zoomIdentity.translate(w / 2 - k * cx, h / 2 - k * cy).scale(k)
           return (
             zoomRef.current?.constrain()(
               t,
@@ -365,14 +364,14 @@ export default function WorldMap({
           )
         : raw
     },
-    [geo, world, region, w, h, cover, still],
+    [geo, world, region, w, h, still],
   )
 
   useEffect(() => {
     if (!geo || !svgRef.current) return
     const svg = select(svgRef.current)
     const behavior = d3zoom<SVGSVGElement, unknown>()
-      .scaleExtent([1, MAX_ZOOM])
+      .scaleExtent([geo.minK, MAX_ZOOM])
       .extent([
         [0, 0],
         [w, h],
@@ -510,7 +509,10 @@ export default function WorldMap({
       const [a, b] = list
       const cx = (a.x + b.x) / 2
       const cy = (a.y + b.y) / 2
-      const k = Math.min(MAX_ZOOM, Math.max(1, (g.start.k * (Math.hypot(a.x - b.x, a.y - b.y) || 1)) / g.dist))
+      const k = Math.min(
+        MAX_ZOOM,
+        Math.max(geo?.minK ?? 1, (g.start.k * (Math.hypot(a.x - b.x, a.y - b.y) || 1)) / g.dist),
+      )
       const [wx, wy] = g.start.invert([g.cx, g.cy])
       applyTransform(cx - wx * k, cy - wy * k, k)
       return
@@ -677,13 +679,7 @@ export default function WorldMap({
                 />
                 <g className="land">
                   {geo.shapes.map((s) => (
-                    <ShapePath
-                      key={s.id}
-                      id={s.id}
-                      d={s.d}
-                      color={tokens.land[s.colorIndex]}
-                      dim={!!inScope && !inScope.has(s.id)}
-                    />
+                    <ShapePath key={s.id} id={s.id} d={s.d} color={tokens.land} dim={!!inScope && !inScope.has(s.id)} />
                   ))}
                 </g>
                 {sheen && dx === 0 && (
