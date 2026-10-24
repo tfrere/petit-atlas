@@ -6,6 +6,7 @@ import { REGIONS } from '../data/regions'
 import type { RegionId } from '../data/types'
 import { COUNTRIES } from '../data/world'
 import type { WorldData } from '../data/world'
+import { completion } from '../game/progress'
 import { formatTime, getRecord } from '../game/records'
 import type { GameConfig } from '../game/records'
 import { poolFor } from '../game/targets'
@@ -31,6 +32,51 @@ function Section({ title, children }: { title: string; children: React.ReactNode
         <Box sx={{ flex: 1, height: '1px', background: tokens.hairSoft }} />
       </Box>
       {children}
+    </Box>
+  )
+}
+
+const PROGRESS_ROWS: { target: TargetKind; mode: PlayMode; label: string }[] = [
+  { target: 'country', mode: 'name', label: 'Pays · nommer' },
+  { target: 'country', mode: 'locate', label: 'Pays · situer' },
+  { target: 'capital', mode: 'name', label: 'Capitales · nommer' },
+  { target: 'capital', mode: 'locate', label: 'Capitales · situer' },
+]
+
+function Progress({ target, mode }: { target: TargetKind; mode: PlayMode }) {
+  return (
+    <Box
+      aria-label="Complétion de chaque mode"
+      sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 2.5, rowGap: 1.25, mt: 0.5 }}
+    >
+      {PROGRESS_ROWS.map((row) => {
+        const c = completion(row.target, row.mode)
+        const active = row.target === target && row.mode === mode
+        return (
+          <Box key={`${row.target}.${row.mode}`} title={`${c.found} / ${c.total}`}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <Typography
+                sx={{ fontSize: '0.8rem', color: active ? tokens.ink : tokens.inkSoft, fontWeight: active ? 600 : 400 }}
+              >
+                {row.label}
+              </Typography>
+              <Typography sx={{ fontSize: '0.8rem', color: tokens.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+                {c.percent} %
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 0.4, height: '2px', background: tokens.hairSoft }}>
+              <Box
+                sx={{
+                  height: '100%',
+                  width: `${c.percent}%`,
+                  background: active ? tokens.brick : tokens.inkSoft,
+                  transition: 'width .3s',
+                }}
+              />
+            </Box>
+          </Box>
+        )
+      })}
     </Box>
   )
 }
@@ -206,6 +252,10 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             <Typography sx={{ mt: 1, fontSize: '0.85rem', color: tokens.inkSoft, fontStyle: 'italic' }}>
               Chaque erreur ajoute 5 secondes au chrono.
             </Typography>
+          </Section>
+
+          <Section title="Complétion">
+            <Progress target={config.target} mode={config.mode} />
           </Section>
         </Box>
 

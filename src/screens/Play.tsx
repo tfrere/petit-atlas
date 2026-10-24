@@ -10,6 +10,7 @@ import Typography from '@mui/material/Typography'
 import { COUNTRIES } from '../data/world'
 import type { WorldData } from '../data/world'
 import { judge } from '../game/matching'
+import { markFound } from '../game/progress'
 import { formatTime } from '../game/records'
 import type { GameConfig } from '../game/records'
 import { TARGETS, buildQuestions } from '../game/targets'
@@ -180,6 +181,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
   const record = useCallback(
     (ok: boolean, extra: Reveal = {}, given?: string) => {
       pause()
+      if (ok) markFound(config.target, config.mode, q.id)
       const list = [...answers, { question: q, ok, given }]
       setAnswers(list)
       setReveal(extra)
@@ -197,7 +199,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
         })
       }
     },
-    [answers, finishOrNext, index, locate, pause, q, world],
+    [answers, config.mode, config.target, finishOrNext, index, locate, pause, q, world],
   )
 
   const submitText = () => {
