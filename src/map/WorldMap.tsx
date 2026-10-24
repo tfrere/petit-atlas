@@ -56,6 +56,8 @@ interface Props {
   line?: [[number, number], [number, number]] | null
   view?: MapView
   interactive?: boolean
+  /** Affiche des pastilles tactiles autour des micro-États pour les rendre faciles à toucher. */
+  tapRings?: boolean
   onTap?: (tap: TapInfo) => void
 }
 
@@ -184,6 +186,7 @@ export default function WorldMap({
   line = null,
   view,
   interactive = true,
+  tapRings = false,
   onTap,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -442,17 +445,19 @@ export default function WorldMap({
             <g ref={ringsRef}>
               {rings.map((r) => {
                 const kind = highlights[r.id]
+                if (!kind && !tapRings) return null
                 return (
                   <g key={r.id} transform={`translate(${r.x},${r.y})`}>
                     <g className="counter">
                       <circle
                         data-id={r.id}
-                        r={11}
-                        fill={kind ? KIND_FILL[kind] : 'rgba(184,138,46,.18)'}
+                        r={kind ? 11 : 9}
+                        fill={kind ? KIND_FILL[kind] : 'rgba(255,250,235,.01)'}
                         fillOpacity={kind ? 0.55 : 1}
                         stroke={kind ? tokens.ink : tokens.inkSoft}
+                        strokeOpacity={kind ? 1 : 0.7}
                         strokeWidth={kind ? 1.6 : 1}
-                        strokeDasharray={kind ? undefined : '2.5 2'}
+                        strokeDasharray={kind ? undefined : '2 2'}
                       />
                     </g>
                   </g>

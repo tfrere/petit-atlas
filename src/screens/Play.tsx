@@ -388,6 +388,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
           line={line}
           view={view}
           onTap={handleTap}
+          tapRings={locate}
           interactive
         />
 
