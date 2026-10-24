@@ -85,10 +85,12 @@ interface ShapePathProps {
   id: string
   d: string
   color: string
+  dim: boolean
 }
 
-const ShapePath = memo(function ShapePath({ id, d, color }: ShapePathProps) {
-  return <path data-id={id} d={d} fill={color} />
+const ShapePath = memo(function ShapePath({ id, d, color, dim }: ShapePathProps) {
+  // Les pays hors périmètre n'ont pas d'identifiant : un tap dessus est traité comme un tap dans l'eau.
+  return dim ? <path data-dim d={d} fill={tokens.dim} /> : <path data-id={id} d={d} fill={color} />
 })
 
 function useElementSize(ref: React.RefObject<HTMLElement | null>) {
@@ -235,16 +237,21 @@ export default function WorldMap({
     }
   }, [world, w, h])
 
+  const inScope = useMemo(
+    () => (region === 'world' ? null : new Set(COUNTRIES.filter((c) => c.region === region).map((c) => c.id))),
+    [region],
+  )
+
   const rings = useMemo(() => {
     if (!geo) return []
-    return COUNTRIES.filter((c) => c.area < RING_AREA_KM2 || !world.byId.has(c.id))
+    return COUNTRIES.filter((c) => (c.area < RING_AREA_KM2 || !world.byId.has(c.id)) && (!inScope || inScope.has(c.id)))
       .map((c) => {
         const shape = world.byId.get(c.id)
         const p = geo.projection(shape ? shape.centroid : [c.lon, c.lat])
         return p ? { id: c.id, x: p[0], y: p[1] } : null
       })
       .filter((r): r is { id: string; x: number; y: number } => !!r)
-  }, [geo, world])
+  }, [geo, world, inScope])
 
   const syncZoomDecor = useCallback((t: ZoomTransform) => {
     gRef.current?.setAttribute('transform', t.toString())
@@ -432,6 +439,7 @@ export default function WorldMap({
           vectorEffect: 'non-scaling-stroke',
           strokeLinejoin: 'round',
         },
+        '& .land path[data-dim]': { strokeOpacity: 0.4 },
       }}
     >
       <svg
@@ -463,7 +471,13 @@ export default function WorldMap({
             />
             <g className="land">
               {geo.shapes.map((s) => (
-                <ShapePath key={s.id} id={s.id} d={s.d} color={tokens.land[s.colorIndex]} />
+                <ShapePath
+                  key={s.id}
+                  id={s.id}
+                  d={s.d}
+                  color={tokens.land[s.colorIndex]}
+                  dim={!!inScope && !inScope.has(s.id)}
+                />
               ))}
             </g>
             <g className="land" pointerEvents="none">
