@@ -323,6 +323,15 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
     ]
   }, [q, locate, phase, reveal.tapped])
 
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) pause()
+      else if (phase === 'asking' && !confirmQuit) resume()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [pause, resume, phase, confirmQuit])
+
   const closeQuit = () => {
     setConfirmQuit(false)
     if (phase === 'asking') resume()

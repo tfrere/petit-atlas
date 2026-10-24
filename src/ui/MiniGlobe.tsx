@@ -18,6 +18,10 @@ const SPIN_DEG_PER_S = 11
 const TILT_DEG = 16
 const MIN_SEGMENT_DEG = 0.6
 const MIN_ISLAND_DEG = 0.9
+const MAX_LAT = 80
+const COAST_MS = 450
+const RETURN_DELAY_MS = 1400
+const IDLE_FRAME_MS = 30
 
 function simplifyRing(ring: Position[]): Position[] {
   const out = [ring[0]]
@@ -58,6 +62,14 @@ const angleDelta = (from: number, to: number) => ((((to - from) % 360) + 540) % 
 /** Petit globe qui tourne ; quand une zone est choisie, il s'oriente vers elle et estompe le reste. */
 export default function MiniGlobe({ world, region, size = 112 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const view = useRef<{
+    lon: number
+    lat: number
+    vlon: number
+    vlat: number
+    dragging: boolean
+    idleAt: number
+  } | null>(null)
 
   const { inScope, outScope } = useMemo(() => {
     const all = [...world.byId.keys()]
@@ -76,7 +88,7 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
     if (!canvas || !ctx) return
-    const dpr = Math.min(window.devicePixelRatio || 1, 3)
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
     canvas.width = size * dpr
     canvas.height = size * dpr
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -90,12 +102,13 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
 
     const box = REGIONS.find((r) => r.id === region)?.box
     const focus = region === 'world' || !box ? null : { lon: (box[0] + box[2]) / 2, lat: (box[1] + box[3]) / 2 }
-    let lon = focus ? focus.lon : 20
-    let lat = focus ? focus.lat : TILT_DEG
-    const initial = { lon, lat }
+    const home = { lon: focus ? focus.lon : 20, lat: focus ? focus.lat : TILT_DEG }
+    const st = view.current ?? { lon: home.lon, lat: home.lat, vlon: 0, vlat: 0, dragging: false, idleAt: 0 }
+    view.current = st
+    st.dragging = false
 
     const draw = () => {
-      projection.rotate([-lon, -lat])
+      projection.rotate([-st.lon, -st.lat])
       ctx.clearRect(0, 0, size, size)
 
       const ocean = ctx.createRadialGradient(c - radius * 0.3, c - radius * 0.38, radius * 0.1, c, c, radius)
@@ -144,32 +157,128 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
       ctx.stroke()
     }
 
-    if (reduce) {
-      lon = initial.lon
-      lat = initial.lat
-      draw()
-      return
-    }
-
     let raf = 0
+    let timer = 0
     let last = performance.now()
+    let drawn = 0
+
+    const coasting = () => Math.abs(st.vlon) > 0.003 || Math.abs(st.vlat) > 0.003
+    const settled = () =>
+      !st.dragging &&
+      !coasting() &&
+      !!focus &&
+      Math.abs(angleDelta(st.lon, focus.lon)) < 0.05 &&
+      Math.abs(focus.lat - st.lat) < 0.05
+
     const frame = (now: number) => {
+      raf = 0
+      const interacting = st.dragging || coasting()
+      if (!interacting && now - drawn < IDLE_FRAME_MS) {
+        raf = requestAnimationFrame(frame)
+        return
+      }
       const dt = Math.min(64, now - last)
       last = now
-      if (focus) {
+      drawn = now
+
+      if (st.dragging) {
+        st.idleAt = now
+      } else if (coasting()) {
+        const decay = Math.exp(-dt / COAST_MS)
+        st.vlon *= decay
+        st.vlat *= decay
+        st.lon += st.vlon * dt
+        st.lat = Math.max(-MAX_LAT, Math.min(MAX_LAT, st.lat + st.vlat * dt))
+        if (!coasting()) {
+          st.vlon = 0
+          st.vlat = 0
+        }
+        st.idleAt = now
+      } else if (now - st.idleAt < RETURN_DELAY_MS) {
+        timer = window.setTimeout(kick, st.idleAt + RETURN_DELAY_MS - now)
+        return
+      } else if (focus) {
         const k = 1 - Math.exp(-dt / 260)
-        lon += angleDelta(lon, focus.lon) * k
-        lat += (focus.lat - lat) * k
+        st.lon += angleDelta(st.lon, focus.lon) * k
+        st.lat += (focus.lat - st.lat) * k
       } else {
-        lon += (SPIN_DEG_PER_S * dt) / 1000
-        lat += (TILT_DEG - lat) * (1 - Math.exp(-dt / 260))
+        st.lon += (SPIN_DEG_PER_S * dt) / 1000
+        st.lat += (TILT_DEG - st.lat) * (1 - Math.exp(-dt / 400))
       }
       draw()
-      const settled = focus && Math.abs(angleDelta(lon, focus.lon)) < 0.05 && Math.abs(focus.lat - lat) < 0.05
-      if (!settled) raf = requestAnimationFrame(frame)
+      if (!settled()) raf = requestAnimationFrame(frame)
     }
-    raf = requestAnimationFrame(frame)
-    return () => cancelAnimationFrame(raf)
+
+    function kick() {
+      window.clearTimeout(timer)
+      if (!raf) {
+        last = performance.now()
+        raf = requestAnimationFrame(frame)
+      }
+    }
+
+    const degPerPx = 180 / Math.PI / radius
+    let pointer: { id: number; x: number; y: number; t: number } | null = null
+    const onDown = (e: PointerEvent) => {
+      if (pointer) return
+      pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp }
+      st.dragging = true
+      st.vlon = 0
+      st.vlat = 0
+      try {
+        canvas.setPointerCapture(e.pointerId)
+      } catch {
+        /* le geste reste suivi tant que le pointeur est sur le globe */
+      }
+      canvas.style.cursor = 'grabbing'
+      kick()
+    }
+    const onMove = (e: PointerEvent) => {
+      if (!pointer || e.pointerId !== pointer.id) return
+      const dt = Math.max(1, e.timeStamp - pointer.t)
+      const dlon = -(e.clientX - pointer.x) * degPerPx
+      const dlat = (e.clientY - pointer.y) * degPerPx
+      st.lon += dlon
+      st.lat = Math.max(-MAX_LAT, Math.min(MAX_LAT, st.lat + dlat))
+      st.vlon = st.vlon * 0.6 + (dlon / dt) * 0.4
+      st.vlat = st.vlat * 0.6 + (dlat / dt) * 0.4
+      pointer.x = e.clientX
+      pointer.y = e.clientY
+      pointer.t = e.timeStamp
+      if (reduce) draw()
+    }
+    const onUp = (e: PointerEvent) => {
+      if (!pointer || e.pointerId !== pointer.id) return
+      if (e.timeStamp - pointer.t > 80 || reduce) {
+        st.vlon = 0
+        st.vlat = 0
+      }
+      pointer = null
+      st.dragging = false
+      st.idleAt = performance.now()
+      canvas.style.cursor = 'grab'
+      if (!reduce) kick()
+    }
+
+    canvas.style.cursor = 'grab'
+    canvas.addEventListener('pointerdown', onDown)
+    canvas.addEventListener('pointermove', onMove)
+    canvas.addEventListener('pointerup', onUp)
+    canvas.addEventListener('pointercancel', onUp)
+
+    draw()
+    if (!reduce) {
+      st.idleAt = performance.now() - RETURN_DELAY_MS
+      kick()
+    }
+    return () => {
+      cancelAnimationFrame(raf)
+      window.clearTimeout(timer)
+      canvas.removeEventListener('pointerdown', onDown)
+      canvas.removeEventListener('pointermove', onMove)
+      canvas.removeEventListener('pointerup', onUp)
+      canvas.removeEventListener('pointercancel', onUp)
+    }
   }, [inScope, outScope, region, size])
 
   return (
@@ -182,6 +291,10 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
         height: size,
         display: 'block',
         flex: 'none',
+        touchAction: 'none',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
         filter: 'drop-shadow(0 10px 10px rgba(58,46,32,.25)) drop-shadow(0 2px 3px rgba(58,46,32,.18))',
       }}
     />

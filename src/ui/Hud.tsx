@@ -5,6 +5,7 @@ import Typography from '@mui/material/Typography'
 import { fontBody, tokens } from '../theme'
 
 const LOW_TIME_MS = 5000
+const TICK_MS = 250
 const RING = 22
 const RING_STROKE = 3.5
 const CIRC = 2 * Math.PI * (RING - RING_STROKE / 2 - 1)
@@ -167,7 +168,7 @@ function TimerRing({
         fired.current = true
         expireRef.current()
       }
-    }, 100)
+    }, TICK_MS)
     return () => window.clearInterval(id)
   }, [read, limitMs, active])
 
@@ -204,7 +205,7 @@ function TimerRing({
           strokeDasharray={CIRC}
           strokeDashoffset={CIRC * (1 - remaining / limitMs)}
           transform={`rotate(-90 ${RING} ${RING})`}
-          style={{ transition: 'stroke-dashoffset .1s linear, stroke .3s' }}
+          style={{ transition: `stroke-dashoffset ${TICK_MS}ms linear, stroke .3s` }}
         />
       </svg>
       <Typography

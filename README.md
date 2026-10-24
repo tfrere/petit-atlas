@@ -37,7 +37,14 @@ Les États trop petits pour être touchés au doigt reçoivent une pastille tact
 
 ## Technique
 
-React 19, TypeScript, Vite, MUI (thème sur mesure), D3 (`d3-geo` et `d3-geo-projection` pour la projection Miller (carte plate) et les tracés SVG, `d3-zoom` pour le pincement et le déplacement), TopoJSON.
+React 19, TypeScript, Vite, MUI (thème sur mesure), D3 (`d3-geo` et `d3-geo-projection` pour la projection Miller (carte plate) et les tracés, `d3-zoom` pour le pincement et le déplacement), TopoJSON.
+
+### Performances
+
+- La carte est dessinée sur un `<canvas>` : tracés `Path2D` précalculés, niveau de détail réduit en vue d'ensemble, élimination des pays hors écran.
+- Pendant un déplacement, le fond de carte est une image mise en cache (avec marge, et répétée horizontalement) : chaque image ne coûte qu'un `drawImage` plus les surcouches (réponses, repères, libellés).
+- Rendu à la demande uniquement (rien ne tourne quand la carte est immobile), résolution plafonnée à 2×, chrono à 4 Hz et mis en pause quand l'onglet est masqué.
+- Le mini globe du menu se manipule au doigt ou à la souris (inertie), puis reprend sa rotation ou son cadrage de zone ; 30 images/s au repos.
 
 Pour ajouter un type de question plus tard (vents, villes…), il suffit d'ajouter une entrée dans `src/game/targets.ts` : éligibilité, question, liste de noms acceptés.
 
