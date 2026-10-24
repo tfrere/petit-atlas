@@ -2,10 +2,10 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import Box from '@mui/material/Box'
 import { keyframes } from '@emotion/react'
-import { geoArea, geoGraticule10, geoPath } from 'd3-geo'
+import { geoArea, geoGraticule, geoPath } from 'd3-geo'
 import type { GeoProjection } from 'd3-geo'
 import { easeCubicInOut } from 'd3-ease'
-import { geoEckert4 } from 'd3-geo-projection'
+import { geoMiller } from 'd3-geo-projection'
 import { select } from 'd3-selection'
 import { zoom as d3zoom, zoomIdentity, zoomTransform } from 'd3-zoom'
 import type { ZoomBehavior, ZoomTransform } from 'd3-zoom'
@@ -73,6 +73,8 @@ interface Props {
 }
 
 const MAX_ZOOM = 120
+const MAP_LAT_MAX = 84
+const MAP_LAT_MIN = -58
 const PAN_GAIN_TOUCH = 1.8
 const PAN_GAIN_MOUSE = 1.4
 const PAN_SLOP_PX = 8
@@ -228,28 +230,40 @@ export default function WorldMap({
   const geo = useMemo(() => {
     if (w < 10 || h < 10) return null
     const pad = 6
-    const projection = geoEckert4().fitExtent(
-      [
-        [pad, pad],
-        [w - pad, h - pad],
-      ],
-      { type: 'Sphere' },
-    )
+    const unit = geoMiller().scale(1).translate([0, 0])
+    const [ux0, uy0] = unit([-180, MAP_LAT_MAX]) as [number, number]
+    const [ux1, uy1] = unit([180, MAP_LAT_MIN]) as [number, number]
+    const k = Math.min((w - 2 * pad) / (ux1 - ux0), (h - 2 * pad) / (uy1 - uy0))
+    const projection = geoMiller()
+      .scale(k)
+      .translate([w / 2 - (k * (ux0 + ux1)) / 2, h / 2 - (k * (uy0 + uy1)) / 2])
     const path = geoPath(projection).digits(2)
     const shapes = world.shapes.map((s) => ({ id: s.id, d: path(s.feature) ?? '', colorIndex: s.colorIndex }))
-    const sphereBounds = path.bounds({ type: 'Sphere' }) as Bounds
+    const x0 = w / 2 - (k * (ux1 - ux0)) / 2
+    const x1 = w / 2 + (k * (ux1 - ux0)) / 2
+    const y0 = h / 2 - (k * (uy1 - uy0)) / 2
+    const y1 = h / 2 + (k * (uy1 - uy0)) / 2
+    const r = still ? 10 : 0
+    const sphereBounds: Bounds = [
+      [x0, y0],
+      [x1, y1],
+    ]
+    const lines = geoGraticule().extent([
+      [-180, MAP_LAT_MIN],
+      [180, MAP_LAT_MAX],
+    ])
     return {
       projection,
       path,
       sphereBounds,
-      sphereWidth: sphereBounds[1][0] - sphereBounds[0][0],
-      sphereHeight: sphereBounds[1][1] - sphereBounds[0][1],
-      sphereD: path({ type: 'Sphere' }) ?? '',
-      graticuleD: path(geoGraticule10()) ?? '',
+      sphereWidth: x1 - x0,
+      sphereHeight: y1 - y0,
+      sphereD: `M${x0 + r},${y0}H${x1 - r}A${r},${r} 0 0 1 ${x1},${y0 + r}V${y1 - r}A${r},${r} 0 0 1 ${x1 - r},${y1}H${x0 + r}A${r},${r} 0 0 1 ${x0},${y1 - r}V${y0 + r}A${r},${r} 0 0 1 ${x0 + r},${y0}Z`,
+      graticuleD: path({ type: 'MultiLineString', coordinates: lines.lines().map((l) => l.coordinates) }) ?? '',
       shapes,
       landD: shapes.map((s) => s.d).join(''),
     }
-  }, [world, w, h])
+  }, [world, w, h, still])
 
   const inScope = useMemo(
     () => (region === 'world' ? null : new Set(COUNTRIES.filter((c) => c.region === region).map((c) => c.id))),
@@ -537,7 +551,15 @@ export default function WorldMap({
     const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-id]')
     const id = hit?.getAttribute('data-id') ?? null
     const back = lonlat && Number.isFinite(lonlat[0]) ? geo.projection(lonlat) : null
-    const valid = !!lonlat && !!back && Math.hypot(back[0] - px, back[1] - py) < 1.5
+    const [[bx0, by0], [bx1, by1]] = geo.sphereBounds
+    const valid =
+      !!lonlat &&
+      !!back &&
+      Math.hypot(back[0] - px, back[1] - py) < 1.5 &&
+      px >= bx0 &&
+      px <= bx1 &&
+      py >= by0 &&
+      py <= by1
     const nearSelected = markers.some((m) => {
       if (m.kind !== 'guess') return false
       const mp = geo.projection([m.lon, m.lat])

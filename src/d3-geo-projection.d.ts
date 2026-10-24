@@ -1,4 +1,4 @@
 declare module 'd3-geo-projection' {
   import type { GeoProjection } from 'd3-geo'
-  export function geoEckert4(): GeoProjection
+  export function geoMiller(): GeoProjection
 }

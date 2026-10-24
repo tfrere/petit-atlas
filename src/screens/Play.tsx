@@ -525,7 +525,13 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
             </Typography>
             {locate && (
               <Typography
-                sx={{ fontWeight: 600, fontSize: 'clamp(1.15rem, 5.4vw, 1.6rem)', lineHeight: 1.15, color: tokens.ink }}
+                sx={{
+                  fontWeight: 600,
+                  fontSize: 'clamp(1rem, 4.6vw, 1.3rem)',
+                  lineHeight: 1.15,
+                  color: tokens.ink,
+                  opacity: 0.88,
+                }}
               >
                 {q.label}
               </Typography>
@@ -566,38 +572,38 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
               position: 'absolute',
               left: 8,
               right: 8,
-              top: 8,
-              p: 1.75,
-              background: 'rgba(249,243,227,.97)',
-              border: `1px solid ${tokens.hair}`,
-              boxShadow: `inset 0 0 0 3px rgba(249,243,227,.97), inset 0 0 0 4px ${tokens.hairSoft}, 0 10px 24px -12px rgba(58,46,32,.5)`,
+              bottom: 'max(10px, env(safe-area-inset-bottom))',
+              py: 0.75,
+              pl: 1.5,
+              pr: 0.75,
+              background: 'rgba(249,243,227,.78)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+              border: `1px solid ${tokens.hairSoft}`,
               borderRadius: '2px',
               display: 'flex',
               alignItems: 'center',
-              gap: 1.5,
+              gap: 1,
             }}
           >
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography
                 sx={{
                   fontWeight: 600,
-                  fontSize: '1.15rem',
-                  lineHeight: 1.15,
+                  fontSize: '0.95rem',
+                  lineHeight: 1.2,
                   color: phase === 'correct' ? tokens.sage : tokens.wrong,
                 }}
               >
                 {phase === 'correct' ? 'Exact' : 'C’était'} : {q.label}
               </Typography>
               {(wrongDetail || correctDetail) && (
-                <Typography sx={{ color: tokens.inkSoft, fontSize: '0.9rem' }}>
+                <Typography sx={{ color: tokens.inkSoft, fontSize: '0.74rem', lineHeight: 1.25 }}>
                   {wrongDetail ?? correctDetail}
                 </Typography>
               )}
-              <Typography sx={{ color: tokens.inkSoft, fontSize: '0.74rem', fontStyle: 'italic', mt: 0.25 }}>
-                ou touche la carte
-              </Typography>
             </Box>
-            <Button variant="contained" autoFocus onClick={() => finishOrNext(answers)}>
+            <Button variant="contained" autoFocus onClick={() => finishOrNext(answers)} sx={{ minHeight: 40, px: 2 }}>
               {nextLabel}
             </Button>
           </Box>
