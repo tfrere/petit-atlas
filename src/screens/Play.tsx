@@ -11,7 +11,6 @@ import { COUNTRIES } from '../data/world'
 import type { WorldData } from '../data/world'
 import { judge } from '../game/matching'
 import { markFound } from '../game/progress'
-import { formatTime } from '../game/records'
 import type { GameConfig } from '../game/records'
 import { TARGETS, buildQuestions } from '../game/targets'
 import type { Question } from '../game/targets'
@@ -40,6 +39,7 @@ interface Props {
 type Phase = 'asking' | 'correct' | 'wrong'
 
 interface Reveal {
+  timeout?: boolean
   tappedId?: string | null
   tapped?: { lon: number; lat: number }
   km?: number
@@ -60,7 +60,8 @@ const halo = {
 }
 
 const CAPITAL_TOLERANCE_KM = 250
-const AUTO_ADVANCE_MS = 850
+const TIME_LIMIT_MS = { name: 20_000, locate: 15_000 }
+const FEEDBACK_GUARD_MS = 450
 
 function distanceKm(a: [number, number], b: [number, number]) {
   const r = Math.PI / 180
@@ -97,28 +98,79 @@ function useStopwatch() {
       startedAt.current = null
     }
   }, [])
+  const reset = useCallback(() => {
+    acc.current = 0
+    startedAt.current = null
+  }, [])
 
-  return { resume, pause, read }
+  return { resume, pause, read, reset }
 }
 
-function Chrono({ read }: { read: () => number }) {
-  const [ms, setMs] = useState(0)
+const LOW_TIME_MS = 5000
+
+/** Compte à rebours de la question : s'arrête dès qu'une réponse est donnée et déclenche `onExpire` à zéro. */
+function Countdown({
+  read,
+  limitMs,
+  active,
+  onExpire,
+}: {
+  read: () => number
+  limitMs: number
+  active: boolean
+  onExpire: () => void
+}) {
+  const [elapsed, setElapsed] = useState(0)
+  const fired = useRef(false)
+  const expireRef = useRef(onExpire)
+
   useEffect(() => {
-    const id = window.setInterval(() => setMs(read()), 100)
+    expireRef.current = onExpire
+  })
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const ms = read()
+      setElapsed(ms)
+      if (active && ms >= limitMs && !fired.current) {
+        fired.current = true
+        expireRef.current()
+      }
+    }, 100)
     return () => window.clearInterval(id)
-  }, [read])
-  return <Stat label="Chrono" value={formatTime(ms)} muted />
+  }, [read, limitMs, active])
+
+  const remaining = Math.max(0, limitMs - elapsed)
+  const low = remaining <= LOW_TIME_MS
+  return (
+    <>
+      <Stat label="Temps" value={`${Math.ceil(remaining / 1000)} s`} color={low ? tokens.brick : undefined} />
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          left: 0,
+          bottom: 0,
+          height: '3px',
+          width: `${(remaining / limitMs) * 100}%`,
+          background: low ? tokens.brick : tokens.inkSoft,
+          opacity: active ? 0.85 : 0.35,
+          transition: 'width .1s linear, background .3s',
+        }}
+      />
+    </>
+  )
 }
 
-function Stat({ label, value, color, muted }: { label: string; value: string; color?: string; muted?: boolean }) {
+function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <Box sx={{ textAlign: 'center', minWidth: 56 }}>
       <Typography
         sx={{
-          fontWeight: muted ? 400 : 600,
-          fontSize: muted ? '0.95rem' : '1.2rem',
+          fontWeight: 600,
+          fontSize: '1.2rem',
           lineHeight: 1.26,
-          color: color ?? (muted ? tokens.inkSoft : undefined),
+          fontVariantNumeric: 'tabular-nums',
+          color,
         }}
       >
         {value}
@@ -157,9 +209,20 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
     config.mode === 'name' ? makeNameView(world, questions[0], 0) : { key: 'start' },
   )
   const inputRef = useRef<HTMLInputElement>(null)
-  const advanceTimer = useRef<number | null>(null)
+  const feedbackAt = useRef(0)
   const watch = useStopwatch()
-  const { resume, pause } = watch
+  const qWatch = useStopwatch()
+  const { read: readTotal } = watch
+  const { read: readQuestion, reset: resetQuestion } = qWatch
+
+  const resume = useCallback(() => {
+    watch.resume()
+    qWatch.resume()
+  }, [watch, qWatch])
+  const pause = useCallback(() => {
+    watch.pause()
+    qWatch.pause()
+  }, [watch, qWatch])
 
   const q = questions[index]
   const score = answers.filter((a) => a.ok).length
@@ -167,20 +230,15 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
 
   useEffect(() => {
     resume()
-    return () => {
-      if (advanceTimer.current) window.clearTimeout(advanceTimer.current)
-    }
     // démarrage unique du chrono
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const finishOrNext = useCallback(
     (list: Answer[]) => {
-      if (advanceTimer.current) window.clearTimeout(advanceTimer.current)
-      advanceTimer.current = null
       const next = index + 1
       if (next >= questions.length) {
-        onFinish({ rawMs: watch.read(), answers: list })
+        onFinish({ rawMs: readTotal(), answers: list })
         return
       }
       const lastWrong = !list[list.length - 1].ok
@@ -193,10 +251,11 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
       } else {
         setView(makeNameView(world, questions[next], next))
       }
+      resetQuestion()
       resume()
       inputRef.current?.focus()
     },
-    [index, questions, locate, world, onFinish, resume, watch],
+    [index, questions, locate, world, onFinish, resume, resetQuestion, readTotal],
   )
 
   const record = useCallback(
@@ -207,9 +266,8 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
       setAnswers(list)
       setReveal(extra)
       setPhase(ok ? 'correct' : 'wrong')
-      if (ok) {
-        advanceTimer.current = window.setTimeout(() => finishOrNext(list), AUTO_ADVANCE_MS)
-      } else if (locate) {
+      feedbackAt.current = performance.now()
+      if (!ok && locate) {
         const pts: [number, number][] = q.points.map((p) => [p.lon, p.lat])
         if (extra.tapped && q.kind === 'capital') pts.push([extra.tapped.lon, extra.tapped.lat])
         setView({
@@ -220,7 +278,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
         })
       }
     },
-    [answers, config.mode, config.target, finishOrNext, index, locate, pause, q, world],
+    [answers, config.mode, config.target, index, locate, pause, q, world],
   )
 
   const submitText = () => {
@@ -233,12 +291,20 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
     record(verdict.correct, {}, text.trim())
   }
 
+  const timeUp = () => {
+    if (phase === 'asking') record(false, { timeout: true })
+  }
+
   const skip = () => {
     if (phase === 'asking') record(false, {}, undefined)
   }
 
   const handleTap = (tap: TapInfo) => {
-    if (!locate || phase !== 'asking') return
+    if (phase !== 'asking') {
+      if (performance.now() - feedbackAt.current > FEEDBACK_GUARD_MS) finishOrNext(answers)
+      return
+    }
+    if (!locate) return
     if (q.kind === 'country') {
       if (!tap.id) return
       record(tap.id === q.id, { tappedId: tap.id })
@@ -334,18 +400,26 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
   const lastGiven = answers[answers.length - 1]?.given
   const wrongDetail =
     phase === 'wrong'
-      ? locate
-        ? q.kind === 'country'
-          ? reveal.tappedId
-            ? `Tu as touché : ${world.byId.get(reveal.tappedId)?.name ?? '—'}`
-            : null
-          : reveal.km !== undefined
-            ? `Tu étais à ${Math.round(reveal.km).toLocaleString('fr-FR')} km`
-            : null
-        : lastGiven
-          ? `Tu as écrit : ${lastGiven}`
-          : 'Passé'
+      ? reveal.timeout
+        ? 'Temps écoulé'
+        : locate
+          ? q.kind === 'country'
+            ? reveal.tappedId
+              ? `Tu as touché : ${world.byId.get(reveal.tappedId)?.name ?? '—'}`
+              : null
+            : reveal.km !== undefined
+              ? `Tu étais à ${Math.round(reveal.km).toLocaleString('fr-FR')} km`
+              : null
+          : lastGiven
+            ? `Tu as écrit : ${lastGiven}`
+            : 'Passé'
       : null
+
+  const correctDetail =
+    phase === 'correct' && locate && q.kind === 'capital' && reveal.km !== undefined
+      ? `À ${Math.round(reveal.km).toLocaleString('fr-FR')} km`
+      : null
+  const nextLabel = index + 1 >= questions.length ? 'Résultat' : 'Suivant'
 
   return (
     <Box
@@ -364,6 +438,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 1,
+          position: 'relative',
           px: 1,
           py: 0.75,
           background: tokens.paper,
@@ -382,7 +457,13 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
         </Button>
         <Stat label="Question" value={`${index + 1}/${questions.length}`} />
         <Stat label="Score" value={String(score)} color={score ? tokens.sage : undefined} />
-        <Chrono read={watch.read} />
+        <Countdown
+          key={index}
+          read={readQuestion}
+          limitMs={TIME_LIMIT_MS[config.mode]}
+          active={phase === 'asking'}
+          onExpire={timeUp}
+        />
       </Box>
 
       <Box sx={{ height: '1px', background: tokens.hair }} />
@@ -401,7 +482,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
           interactive
         />
 
-        {!(locate && phase === 'wrong') && (
+        {!(locate && phase !== 'asking') && (
           <Box
             sx={{
               position: 'absolute',
@@ -414,16 +495,11 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
             }}
           >
             <Typography variant="overline" sx={{ color: tokens.brickDark, display: 'block', fontSize: '0.64rem' }}>
-              {prompt}
+              {phase !== 'asking' ? 'Touche la carte pour continuer' : prompt}
             </Typography>
             {locate && (
               <Typography
-                sx={{
-                  fontWeight: 600,
-                  fontSize: 'clamp(1.15rem, 5.4vw, 1.6rem)',
-                  lineHeight: 1.15,
-                  color: phase === 'correct' ? tokens.sage : tokens.ink,
-                }}
+                sx={{ fontWeight: 600, fontSize: 'clamp(1.15rem, 5.4vw, 1.6rem)', lineHeight: 1.15, color: tokens.ink }}
               >
                 {q.label}
               </Typography>
@@ -431,7 +507,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
           </Box>
         )}
 
-        {locate && phase === 'wrong' && (
+        {locate && phase !== 'asking' && (
           <Box
             sx={{
               position: 'absolute',
@@ -449,15 +525,27 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
             }}
           >
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontWeight: 600, fontSize: '1.15rem', lineHeight: 1.15 }}>
-                C’était : {q.label}
+              <Typography
+                sx={{
+                  fontWeight: 600,
+                  fontSize: '1.15rem',
+                  lineHeight: 1.15,
+                  color: phase === 'correct' ? tokens.sage : tokens.wrong,
+                }}
+              >
+                {phase === 'correct' ? 'Exact' : 'C’était'} : {q.label}
               </Typography>
-              {wrongDetail && (
-                <Typography sx={{ color: tokens.inkSoft, fontSize: '0.95rem' }}>{wrongDetail}</Typography>
+              {(wrongDetail || correctDetail) && (
+                <Typography sx={{ color: tokens.inkSoft, fontSize: '0.9rem' }}>
+                  {wrongDetail ?? correctDetail}
+                </Typography>
               )}
+              <Typography sx={{ color: tokens.inkSoft, fontSize: '0.74rem', fontStyle: 'italic', mt: 0.25 }}>
+                ou touche la carte
+              </Typography>
             </Box>
             <Button variant="contained" autoFocus onClick={() => finishOrNext(answers)}>
-              Continuer
+              {nextLabel}
             </Button>
           </Box>
         )}
@@ -542,7 +630,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
                 onMouseDown={(e) => e.preventDefault()}
                 sx={{ minWidth: 104, height: 50 }}
               >
-                {phase === 'asking' ? 'Valider' : 'Suite'}
+                {phase === 'asking' ? 'Valider' : nextLabel}
               </Button>
             </Box>
             {phase === 'asking' && (
