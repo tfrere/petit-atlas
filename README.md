@@ -35,7 +35,7 @@ Les États trop petits pour être touchés au doigt reçoivent une pastille tact
 
 ## Technique
 
-React 19, TypeScript, Vite, MUI (thème sur mesure), D3 (`d3-geo` pour la projection Natural Earth et les tracés SVG, `d3-zoom` pour le pincement et le déplacement), TopoJSON.
+React 19, TypeScript, Vite, MUI (thème sur mesure), D3 (`d3-geo` et `d3-geo-projection` pour la projection Eckert IV et les tracés SVG, `d3-zoom` pour le pincement et le déplacement), TopoJSON.
 
 Pour ajouter un type de question plus tard (vents, villes…), il suffit d'ajouter une entrée dans `src/game/targets.ts` : éligibilité, question, liste de noms acceptés.
 

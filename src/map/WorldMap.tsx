@@ -2,9 +2,10 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import Box from '@mui/material/Box'
 import { keyframes } from '@emotion/react'
-import { geoArea, geoGraticule10, geoNaturalEarth1, geoPath } from 'd3-geo'
+import { geoArea, geoGraticule10, geoPath } from 'd3-geo'
 import type { GeoProjection } from 'd3-geo'
 import { easeCubicInOut } from 'd3-ease'
+import { geoEckert4 } from 'd3-geo-projection'
 import { select } from 'd3-selection'
 import { zoom as d3zoom, zoomIdentity, zoomTransform } from 'd3-zoom'
 import type { ZoomBehavior, ZoomTransform } from 'd3-zoom'
@@ -214,7 +215,7 @@ export default function WorldMap({
   const geo = useMemo(() => {
     if (w < 10 || h < 10) return null
     const pad = 6
-    const projection = geoNaturalEarth1().fitExtent(
+    const projection = geoEckert4().fitExtent(
       [
         [pad, pad],
         [w - pad, h - pad],
