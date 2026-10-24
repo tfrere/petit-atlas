@@ -6,8 +6,8 @@ Jeu de géographie au chrono, pensé pour le mobile, sur une carte façon vieil 
 
 |  | Je nomme | Je situe |
 |---|---|---|
-| **Pays** | Un pays est surligné sur la carte, tu écris son nom. | Un nom s'affiche, tu touches le pays. |
-| **Capitales** | Un pays est surligné et sa capitale marquée d'une étoile, tu écris le nom de la capitale. | Un nom de capitale s'affiche, tu touches son emplacement (tolérance : 250 km). |
+| **Pays** | Un pays est surligné sur la carte, tu écris son nom. | Un nom s'affiche, tu touches le pays pour le sélectionner, puis tu le retouches (ou « Sélectionner ») pour valider. |
+| **Capitales** | Un pays est surligné et sa capitale marquée d'une étoile, tu écris le nom de la capitale. | Un nom de capitale s'affiche, tu touches son emplacement, puis tu valides de la même façon (tolérance : 250 km). |
 
 - Régions : Monde, Europe, Afrique, Asie, Amériques, Océanie.
 - Séries de 10, 20 ou toutes les questions de la région.

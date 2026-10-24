@@ -17,7 +17,7 @@ import { COUNTRIES } from '../data/world'
 import type { WorldData } from '../data/world'
 import { fontBody, tokens } from '../theme'
 
-export type HighlightKind = 'target' | 'correct' | 'wrong'
+export type HighlightKind = 'target' | 'selected' | 'correct' | 'wrong'
 
 export interface MapMarker {
   lon: number
@@ -46,6 +46,8 @@ export interface TapInfo {
   id: string | null
   lon: number | null
   lat: number | null
+  /** Le tap est tombé à moins de ~30 px d'un repère « guess » (sélection en cours). */
+  nearSelected: boolean
 }
 
 interface Props {
@@ -71,10 +73,15 @@ interface Props {
 }
 
 const MAX_ZOOM = 120
+const PAN_GAIN_TOUCH = 1.8
+const PAN_GAIN_MOUSE = 1.4
+const PAN_SLOP_PX = 8
+const SELECT_RADIUS_PX = 30
 const RING_AREA_KM2 = 3000
 
 const KIND_FILL: Record<HighlightKind, string> = {
   target: tokens.target,
+  selected: tokens.selected,
   correct: tokens.sage,
   wrong: tokens.wrong,
 }
@@ -343,10 +350,7 @@ export default function WorldMap({
         [w, h],
       ])
       .translateExtent(geo.sphereBounds)
-      .filter((e: Event) => {
-        const ev = e as MouseEvent
-        return interactive && e.type !== 'dblclick' && (!ev.ctrlKey || e.type === 'wheel') && !ev.button
-      })
+      .filter((e: Event) => interactive && e.type === 'wheel')
       .on('zoom', (e) => syncZoomDecor(e.transform))
     svg.call(behavior)
     zoomRef.current = behavior
@@ -374,41 +378,183 @@ export default function WorldMap({
   }, [geo, viewKey, regionKey])
 
   const press = useRef<{ x: number; y: number; t: number; multi: boolean } | null>(null)
-  const pointers = useRef(new Set<number>())
+  const pts = useRef(new Map<number, { x: number; y: number }>())
+  const gesture = useRef<{
+    mode: 'pan' | 'pinch'
+    start: ZoomTransform
+    cx: number
+    cy: number
+    dist: number
+    engaged: boolean
+    gain: number
+    samples: { x: number; y: number; t: number }[]
+  } | null>(null)
+  const fling = useRef<number | null>(null)
+
+  const applyTransform = useCallback(
+    (x: number, y: number, k: number) => {
+      if (!geo || !svgRef.current || !zoomRef.current) return
+      const t = zoomRef.current.constrain()(
+        zoomIdentity.translate(x, y).scale(k),
+        [
+          [0, 0],
+          [w, h],
+        ],
+        geo.sphereBounds,
+      )
+      select(svgRef.current).call(zoomRef.current.transform, t)
+    },
+    [geo, w, h],
+  )
+
+  const stopFling = () => {
+    if (fling.current !== null) cancelAnimationFrame(fling.current)
+    fling.current = null
+  }
+
+  const startGesture = (pointerType: string) => {
+    if (!svgRef.current) return
+    const list = [...pts.current.values()]
+    const start = zoomTransform(svgRef.current)
+    if (list.length >= 2) {
+      const [a, b] = list
+      gesture.current = {
+        mode: 'pinch',
+        start,
+        cx: (a.x + b.x) / 2,
+        cy: (a.y + b.y) / 2,
+        dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+        engaged: true,
+        gain: 1,
+        samples: [],
+      }
+    } else if (list.length === 1) {
+      gesture.current = {
+        mode: 'pan',
+        start,
+        cx: list[0].x,
+        cy: list[0].y,
+        dist: 0,
+        engaged: gesture.current?.engaged ?? false,
+        gain: pointerType === 'mouse' ? PAN_GAIN_MOUSE : PAN_GAIN_TOUCH,
+        samples: [],
+      }
+    } else gesture.current = null
+  }
 
   const onPointerDown = (e: ReactPointerEvent) => {
-    pointers.current.add(e.pointerId)
-    if (pointers.current.size > 1) {
+    if (!svgRef.current) return
+    stopFling()
+    select(svgRef.current).interrupt()
+    try {
+      svgRef.current.setPointerCapture(e.pointerId)
+    } catch {
+      /* capture indisponible : le geste reste suivi tant que le pointeur est sur la carte */
+    }
+    const rect = svgRef.current.getBoundingClientRect()
+    pts.current.set(e.pointerId, { x: e.clientX - rect.left, y: e.clientY - rect.top })
+    if (pts.current.size > 1) {
       if (press.current) press.current.multi = true
+    } else {
+      press.current = { x: e.clientX, y: e.clientY, t: performance.now(), multi: false }
+      gesture.current = null
+    }
+    startGesture(e.pointerType)
+  }
+
+  const onPointerMove = (e: ReactPointerEvent) => {
+    const g = gesture.current
+    if (!g || !svgRef.current || !pts.current.has(e.pointerId)) return
+    const rect = svgRef.current.getBoundingClientRect()
+    pts.current.set(e.pointerId, { x: e.clientX - rect.left, y: e.clientY - rect.top })
+    const list = [...pts.current.values()]
+    if (g.mode === 'pinch' && list.length >= 2) {
+      const [a, b] = list
+      const cx = (a.x + b.x) / 2
+      const cy = (a.y + b.y) / 2
+      const k = Math.min(MAX_ZOOM, Math.max(1, (g.start.k * (Math.hypot(a.x - b.x, a.y - b.y) || 1)) / g.dist))
+      const [wx, wy] = g.start.invert([g.cx, g.cy])
+      applyTransform(cx - wx * k, cy - wy * k, k)
       return
     }
-    press.current = { x: e.clientX, y: e.clientY, t: performance.now(), multi: false }
+    const p = list[0]
+    const dx = p.x - g.cx
+    const dy = p.y - g.cy
+    if (!g.engaged) {
+      if (Math.hypot(dx, dy) < PAN_SLOP_PX) return
+      g.engaged = true
+    }
+    applyTransform(g.start.x + dx * g.gain, g.start.y + dy * g.gain, g.start.k)
+    const now = performance.now()
+    g.samples.push({ x: p.x, y: p.y, t: now })
+    while (g.samples.length > 2 && now - g.samples[0].t > 90) g.samples.shift()
+  }
+
+  const startFling = (g: NonNullable<typeof gesture.current>) => {
+    const first = g.samples[0]
+    const last = g.samples[g.samples.length - 1]
+    if (!first || !last || last.t === first.t || performance.now() - last.t > 70) return
+    let vx = ((last.x - first.x) / (last.t - first.t)) * g.gain
+    let vy = ((last.y - first.y) / (last.t - first.t)) * g.gain
+    if (Math.hypot(vx, vy) < 0.25) return
+    let prev = performance.now()
+    const step = (now: number) => {
+      if (!svgRef.current) return
+      const dt = Math.min(48, now - prev)
+      prev = now
+      const decay = Math.exp(-dt / 380)
+      vx *= decay
+      vy *= decay
+      const cur = zoomTransform(svgRef.current)
+      applyTransform(cur.x + vx * dt, cur.y + vy * dt, cur.k)
+      fling.current = Math.hypot(vx, vy) > 0.03 ? requestAnimationFrame(step) : null
+    }
+    fling.current = requestAnimationFrame(step)
+  }
+
+  const endPointer = (e: ReactPointerEvent) => {
+    pts.current.delete(e.pointerId)
+    const g = gesture.current
+    if (pts.current.size === 0) {
+      gesture.current = null
+      if (g && g.mode === 'pan' && g.engaged && e.type === 'pointerup') startFling(g)
+    } else startGesture(e.pointerType)
   }
 
   const onPointerUp = (e: ReactPointerEvent) => {
-    pointers.current.delete(e.pointerId)
     const p = press.current
-    if (pointers.current.size === 0) press.current = null
+    endPointer(e)
+    if (pts.current.size === 0) press.current = null
     if (!p || p.multi || !onTap || !geo || !svgRef.current) return
-    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10 || performance.now() - p.t > 700) return
+    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > PAN_SLOP_PX || performance.now() - p.t > 700) return
 
     const rect = svgRef.current.getBoundingClientRect()
     const sx = e.clientX - rect.left
     const sy = e.clientY - rect.top
-    const [px, py] = zoomTransform(svgRef.current).invert([sx, sy])
+    const transform = zoomTransform(svgRef.current)
+    const [px, py] = transform.invert([sx, sy])
     const lonlat = geo.projection.invert?.([px, py])
     const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-id]')
     const id = hit?.getAttribute('data-id') ?? null
     const back = lonlat && Number.isFinite(lonlat[0]) ? geo.projection(lonlat) : null
     const valid = !!lonlat && !!back && Math.hypot(back[0] - px, back[1] - py) < 1.5
+    const nearSelected = markers.some((m) => {
+      if (m.kind !== 'guess') return false
+      const mp = geo.projection([m.lon, m.lat])
+      if (!mp) return false
+      const [mx, my] = transform.apply(mp)
+      return Math.hypot(mx - sx, my - sy) < SELECT_RADIUS_PX
+    })
     setSplash({ x: sx, y: sy, n: Date.now() })
-    onTap({ id, lon: valid ? lonlat![0] : null, lat: valid ? lonlat![1] : null })
+    onTap({ id, lon: valid ? lonlat![0] : null, lat: valid ? lonlat![1] : null, nearSelected })
   }
 
   const onPointerCancel = (e: ReactPointerEvent) => {
-    pointers.current.delete(e.pointerId)
-    if (pointers.current.size === 0) press.current = null
+    endPointer(e)
+    if (pts.current.size === 0) press.current = null
   }
+
+  useEffect(() => stopFling, [])
 
   const highlighted = Object.entries(highlights)
   const project = (lon: number, lat: number) => geo?.projection([lon, lat]) ?? null
@@ -442,6 +588,7 @@ export default function WorldMap({
         height={h}
         style={{ display: 'block', cursor: interactive ? 'crosshair' : 'default' }}
         onPointerDown={interactive ? onPointerDown : undefined}
+        onPointerMove={interactive ? onPointerMove : undefined}
         onPointerUp={interactive ? onPointerUp : undefined}
         onPointerCancel={interactive ? onPointerCancel : undefined}
       >

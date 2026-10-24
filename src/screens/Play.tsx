@@ -38,6 +38,12 @@ interface Props {
 
 type Phase = 'asking' | 'correct' | 'wrong'
 
+interface Selection {
+  id?: string
+  lon?: number
+  lat?: number
+}
+
 interface Reveal {
   timeout?: boolean
   tappedId?: string | null
@@ -210,6 +216,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
   )
   const inputRef = useRef<HTMLInputElement>(null)
   const feedbackAt = useRef(0)
+  const [selection, setSelection] = useState<Selection | null>(null)
   const watch = useStopwatch()
   const qWatch = useStopwatch()
   const { read: readTotal } = watch
@@ -245,6 +252,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
       setIndex(next)
       setPhase('asking')
       setReveal({})
+      setSelection(null)
       setText('')
       if (locate) {
         if (lastWrong) setView({ key: `reset${next}` })
@@ -299,6 +307,20 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
     if (phase === 'asking') record(false, {}, undefined)
   }
 
+  const confirmSelection = () => {
+    if (!selection || phase !== 'asking') return
+    if (q.kind === 'country') {
+      if (selection.id) record(selection.id === q.id, { tappedId: selection.id })
+    } else if (selection.lon !== undefined && selection.lat !== undefined) {
+      const at: [number, number] = [selection.lon, selection.lat]
+      const km = Math.min(...q.points.map((p) => distanceKm(at, [p.lon, p.lat])))
+      const nearest = q.points.reduce((a, b) =>
+        distanceKm(at, [a.lon, a.lat]) <= distanceKm(at, [b.lon, b.lat]) ? a : b,
+      )
+      record(km <= CAPITAL_TOLERANCE_KM, { tapped: { lon: at[0], lat: at[1] }, km }, nearest.label)
+    }
+  }
+
   const handleTap = (tap: TapInfo) => {
     if (phase !== 'asking') {
       if (performance.now() - feedbackAt.current > FEEDBACK_GUARD_MS) finishOrNext(answers)
@@ -307,14 +329,12 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
     if (!locate) return
     if (q.kind === 'country') {
       if (!tap.id) return
-      record(tap.id === q.id, { tappedId: tap.id })
+      if (selection?.id === tap.id) confirmSelection()
+      else setSelection({ id: tap.id })
     } else {
       if (tap.lon === null || tap.lat === null) return
-      const km = Math.min(...q.points.map((p) => distanceKm([tap.lon!, tap.lat!], [p.lon, p.lat])))
-      const nearest = q.points.reduce((a, b) =>
-        distanceKm([tap.lon!, tap.lat!], [a.lon, a.lat]) <= distanceKm([tap.lon!, tap.lat!], [b.lon, b.lat]) ? a : b,
-      )
-      record(km <= CAPITAL_TOLERANCE_KM, { tapped: { lon: tap.lon, lat: tap.lat }, km }, nearest.label)
+      if (selection?.lon !== undefined && tap.nearSelected) confirmSelection()
+      else setSelection({ lon: tap.lon, lat: tap.lat })
     }
   }
 
@@ -323,6 +343,8 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
     if (!q) return h
     if (!locate) {
       h[q.id] = phase === 'asking' ? 'target' : phase === 'correct' ? 'correct' : 'wrong'
+    } else if (phase === 'asking') {
+      if (selection?.id) h[selection.id] = 'selected'
     } else if (phase === 'correct') {
       if (q.kind === 'country') h[q.id] = 'correct'
     } else if (phase === 'wrong') {
@@ -332,16 +354,20 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
       }
     }
     return h
-  }, [q, locate, phase, reveal.tappedId])
+  }, [q, locate, phase, reveal.tappedId, selection])
 
   const markers = useMemo<MapMarker[]>(() => {
     if (!q) return []
     const list: MapMarker[] = []
     const showStar = q.kind === 'capital' && (!locate || phase !== 'asking')
     if (showStar) q.points.forEach((p) => list.push({ lon: p.lon, lat: p.lat, kind: 'star' }))
-    if (locate && q.kind === 'capital' && reveal.tapped) list.push({ ...reveal.tapped, kind: 'guess' })
+    if (locate && q.kind === 'capital') {
+      if (reveal.tapped) list.push({ ...reveal.tapped, kind: 'guess' })
+      else if (phase === 'asking' && selection?.lon !== undefined && selection.lat !== undefined)
+        list.push({ lon: selection.lon, lat: selection.lat, kind: 'guess' })
+    }
     return list
-  }, [q, locate, phase, reveal.tapped])
+  }, [q, locate, phase, reveal.tapped, selection])
 
   const labels = useMemo<MapLabel[]>(() => {
     if (!q || phase === 'asking') return []
@@ -504,6 +530,33 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
                 {q.label}
               </Typography>
             )}
+          </Box>
+        )}
+
+        {locate && phase === 'asking' && selection && (
+          <Box
+            sx={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 'max(18px, env(safe-area-inset-bottom))',
+              display: 'flex',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+            }}
+          >
+            <Button
+              variant="contained"
+              onClick={confirmSelection}
+              sx={{
+                pointerEvents: 'auto',
+                minWidth: 200,
+                minHeight: 52,
+                filter: 'drop-shadow(0 8px 10px rgba(58,46,32,.35))',
+              }}
+            >
+              Sélectionner
+            </Button>
           </Box>
         )}
 
