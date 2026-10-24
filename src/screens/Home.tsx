@@ -36,58 +36,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-const PROGRESS_ROWS: { target: TargetKind; mode: PlayMode; label: string }[] = [
-  { target: 'country', mode: 'name', label: 'Pays · nommer' },
-  { target: 'country', mode: 'locate', label: 'Pays · situer' },
-  { target: 'capital', mode: 'name', label: 'Capitales · nommer' },
-  { target: 'capital', mode: 'locate', label: 'Capitales · situer' },
+const TARGET_OPTIONS: { value: TargetKind; label: string; hint?: string }[] = [
+  { value: 'country', label: 'Pays' },
+  { value: 'capital', label: 'Capitales' },
 ]
-
-function Progress({ target, mode }: { target: TargetKind; mode: PlayMode }) {
-  return (
-    <Box
-      aria-label="Complétion de chaque mode"
-      sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 2.5, rowGap: 1.25, mt: 0.5 }}
-    >
-      {PROGRESS_ROWS.map((row) => {
-        const c = completion(row.target, row.mode)
-        const active = row.target === target && row.mode === mode
-        return (
-          <Box key={`${row.target}.${row.mode}`} title={`${c.found} / ${c.total}`}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <Typography
-                sx={{ fontSize: '0.8rem', color: active ? tokens.ink : tokens.inkSoft, fontWeight: active ? 600 : 400 }}
-              >
-                {row.label}
-              </Typography>
-              <Typography sx={{ fontSize: '0.8rem', color: tokens.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
-                {c.percent} %
-              </Typography>
-            </Box>
-            <Box sx={{ mt: 0.4, height: '2px', background: tokens.hairSoft }}>
-              <Box
-                sx={{
-                  height: '100%',
-                  width: `${c.percent}%`,
-                  background: active ? tokens.brick : tokens.inkSoft,
-                  transition: 'width .3s',
-                }}
-              />
-            </Box>
-          </Box>
-        )
-      })}
-    </Box>
-  )
-}
-
-const TARGET_OPTIONS = [
-  { value: 'country' as const, label: 'Pays' },
-  { value: 'capital' as const, label: 'Capitales' },
-]
-const MODE_OPTIONS = [
-  { value: 'name' as const, label: 'Je nomme', hint: 'la carte, j’écris' },
-  { value: 'locate' as const, label: 'Je situe', hint: 'le nom, je touche' },
+const MODE_OPTIONS: { value: PlayMode; label: string; hint?: string }[] = [
+  { value: 'name', label: 'Je nomme', hint: 'la carte, j’écris' },
+  { value: 'locate', label: 'Je situe', hint: 'le nom, je touche' },
 ]
 const COUNTS = [10, 20, 0]
 
@@ -95,6 +50,15 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
   const total = useMemo(() => poolFor(config.target, config.region, COUNTRIES).length, [config.target, config.region])
   const record = getRecord(config)
   const effectiveCount = config.count === 0 || config.count >= total ? total : config.count
+
+  const withProgress = <T extends TargetKind | PlayMode>(
+    options: { value: T; label: string; hint?: string }[],
+    pair: (v: T) => [TargetKind, PlayMode],
+  ) =>
+    options.map((o) => {
+      const c = completion(...pair(o.value))
+      return { ...o, progress: c.percent, progressTitle: `${c.found} / ${c.total}` }
+    })
 
   const set = (patch: Partial<GameConfig>) => onChange({ ...config, ...patch })
 
@@ -196,7 +160,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             <Segmented
               label="Cible"
               value={config.target}
-              options={TARGET_OPTIONS}
+              options={withProgress(TARGET_OPTIONS, (t) => [t, config.mode])}
               onChange={(v: TargetKind) => set({ target: v })}
             />
           </Section>
@@ -205,13 +169,17 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             <Segmented
               label="Mode"
               value={config.mode}
-              options={MODE_OPTIONS}
+              options={withProgress(MODE_OPTIONS, (m) => [config.target, m])}
               onChange={(v: PlayMode) => set({ mode: v })}
             />
           </Section>
 
           <Section title="Où">
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }} role="radiogroup" aria-label="Région">
+            <Box
+              sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 0.75 }}
+              role="radiogroup"
+              aria-label="Région"
+            >
               {REGIONS.map((r) => {
                 const selected = r.id === config.region
                 return (
@@ -223,8 +191,8 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
                     aria-checked={selected}
                     onClick={() => set({ region: r.id as RegionId })}
                     sx={{
-                      minHeight: 40,
-                      px: 1.75,
+                      minHeight: 44,
+                      px: 1,
                       fontFamily: fontBody,
                       fontSize: '1rem',
                       fontWeight: selected ? 600 : 400,
@@ -252,10 +220,6 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             <Typography sx={{ mt: 1, fontSize: '0.85rem', color: tokens.inkSoft, fontStyle: 'italic' }}>
               Chaque erreur ajoute 5 secondes au chrono.
             </Typography>
-          </Section>
-
-          <Section title="Complétion">
-            <Progress target={config.target} mode={config.mode} />
           </Section>
         </Box>
 

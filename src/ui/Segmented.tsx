@@ -5,6 +5,9 @@ export interface SegmentOption<T extends string | number> {
   value: T
   label: string
   hint?: string
+  /** Complétion 0–100 : affichée en pourcentage discret et en filet au pied du bouton */
+  progress?: number
+  progressTitle?: string
 }
 
 interface Props<T extends string | number> {
@@ -32,7 +35,9 @@ export default function Segmented<T extends string | number>({ value, options, o
             role="radio"
             aria-checked={active}
             onClick={() => onChange(o.value)}
+            title={o.progressTitle}
             sx={{
+              position: 'relative',
               flex: 1,
               minHeight: 48,
               px: 1,
@@ -45,7 +50,7 @@ export default function Segmented<T extends string | number>({ value, options, o
               background: active ? 'rgba(168,69,43,.09)' : 'transparent',
               border: 0,
               borderLeft: i === 0 ? 0 : `1px solid ${tokens.hairSoft}`,
-              boxShadow: active ? `inset 0 -2px 0 ${tokens.brick}` : 'none',
+              boxShadow: active && o.progress === undefined ? `inset 0 -2px 0 ${tokens.brick}` : 'none',
               cursor: 'pointer',
               transition: 'background .15s',
               '&:hover': { background: active ? 'rgba(168,69,43,.12)' : 'rgba(58,46,32,.04)' },
@@ -65,6 +70,46 @@ export default function Segmented<T extends string | number>({ value, options, o
               >
                 {o.hint}
               </Box>
+            )}
+            {o.progress !== undefined && (
+              <>
+                <Box
+                  component="span"
+                  sx={{
+                    display: 'block',
+                    mt: 0.25,
+                    fontSize: '0.78rem',
+                    fontWeight: 400,
+                    color: active ? tokens.brickDark : tokens.inkSoft,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {o.progress} %
+                </Box>
+                <Box
+                  component="span"
+                  aria-hidden
+                  sx={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: '2px',
+                    background: tokens.hairSoft,
+                  }}
+                >
+                  <Box
+                    component="span"
+                    sx={{
+                      display: 'block',
+                      height: '100%',
+                      width: `${o.progress}%`,
+                      background: active ? tokens.brick : tokens.inkSoft,
+                      transition: 'width .3s',
+                    }}
+                  />
+                </Box>
+              </>
             )}
           </Box>
         )
