@@ -219,7 +219,9 @@ export default function WorldMap({
     return {
       projection,
       path,
+      sphereBounds,
       sphereWidth: sphereBounds[1][0] - sphereBounds[0][0],
+      sphereHeight: sphereBounds[1][1] - sphereBounds[0][1],
       sphereD: path({ type: 'Sphere' }) ?? '',
       graticuleD: path(geoGraticule10()) ?? '',
       shapes,
@@ -278,8 +280,20 @@ export default function WorldMap({
       bw = Math.max(bw, minSpan)
       bh = Math.max(bh, minSpan * (h / w))
       const pad = chunks.length ? (v?.pad ?? 1.5) : 1.08
-      const k = Math.max(1, Math.min(MAX_ZOOM, Math.min(w / (bw * pad), h / (bh * pad))))
-      return zoomIdentity.translate(w / 2 - k * cx, h / 2 - k * cy).scale(k)
+      const fill = Math.max(1, h / geo.sphereHeight, w / geo.sphereWidth)
+      const k = Math.max(fill, Math.min(MAX_ZOOM, Math.min(w / (bw * pad), h / (bh * pad))))
+      const raw = zoomIdentity.translate(w / 2 - k * cx, h / 2 - k * cy).scale(k)
+      const constrain = zoomRef.current?.constrain()
+      return constrain
+        ? constrain(
+            raw,
+            [
+              [0, 0],
+              [w, h],
+            ],
+            geo.sphereBounds,
+          )
+        : raw
     },
     [geo, world, region, w, h],
   )
@@ -293,10 +307,7 @@ export default function WorldMap({
         [0, 0],
         [w, h],
       ])
-      .translateExtent([
-        [0, 0],
-        [w, h],
-      ])
+      .translateExtent(geo.sphereBounds)
       .filter((e: Event) => {
         const ev = e as MouseEvent
         return interactive && e.type !== 'dblclick' && (!ev.ctrlKey || e.type === 'wheel') && !ev.button
@@ -591,8 +602,8 @@ export default function WorldMap({
               aria-label={label}
               onClick={action}
               sx={{
-                width: 40,
-                height: 40,
+                width: 44,
+                height: 44,
                 fontFamily: fontDisplay,
                 fontSize: 22,
                 fontWeight: 500,
