@@ -3,6 +3,7 @@ import { keyframes } from '@emotion/react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Typography from '@mui/material/Typography'
+import useMediaQuery from '@mui/material/useMediaQuery'
 import { REGIONS } from '../data/regions'
 import type { RegionId } from '../data/types'
 import { COUNTRIES } from '../data/world'
@@ -13,6 +14,7 @@ import { poolFor } from '../game/targets'
 import type { PlayMode, TargetKind } from '../game/targets'
 import WorldMap from '../map/WorldMap'
 import { fontBody, tokens } from '../theme'
+import MiniGlobe from '../ui/MiniGlobe'
 import Segmented from '../ui/Segmented'
 
 const riseIn = keyframes`
@@ -70,6 +72,8 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
       return { ...o, progress: c.percent, progressTitle: `${c.found} / ${c.total}` }
     })
 
+  const compact = useMediaQuery('(max-width:599.95px)')
+
   const set = (patch: Partial<GameConfig>) => onChange({ ...config, ...patch })
 
   return (
@@ -77,61 +81,101 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
       sx={{
         height: 'var(--app-h, 100dvh)',
         overflowY: { xs: 'auto', md: 'hidden' },
-        display: { md: 'grid' },
+        display: { xs: 'flex', md: 'grid' },
+        flexDirection: { xs: 'column' },
         gridTemplateColumns: { md: 'minmax(0, 1fr) 500px' },
       }}
     >
-      <Box
-        sx={{
-          height: { md: '100%' },
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: { md: 'center' },
-          textAlign: 'center',
-          px: { xs: 2, md: 6 },
-          pt: { xs: 'max(22px, env(safe-area-inset-top))', md: 0 },
-          pb: { xs: 1.5, md: 0 },
-          background: {
-            md: 'radial-gradient(ellipse 75% 55% at 50% 52%, rgba(255,252,243,.85), rgba(243,234,212,0) 72%)',
-          },
-        }}
-      >
-        <Typography variant="overline" sx={{ color: tokens.brick, ...rise(0) }}>
-          Géographie · pays & capitales
-        </Typography>
-        <Typography
-          variant="h1"
-          sx={{
-            mt: 1,
-            fontSize: { xs: '3.1rem', sm: '4.2rem', md: 'clamp(4rem, 8.4vw, 7rem)' },
-            lineHeight: 1,
-            letterSpacing: '-0.025em',
-            fontStyle: 'italic',
-            fontWeight: 500,
-            ...rise(80),
-          }}
-        >
-          Le Petit Atlas
-        </Typography>
-        <Typography sx={{ mt: 1.5, maxWidth: '36ch', fontSize: '0.86rem', color: tokens.inkSoft, ...rise(160) }}>
-          Devine les pays et les capitales sur une carte d’atlas.
-        </Typography>
+      {compact ? (
         <Box
           sx={{
-            mt: { xs: 3, md: 5.5 },
-            width: {
-              xs: '100%',
-              md: 'min(100%, 900px, calc((var(--app-h, 100dvh) - 360px) * 2.06))',
-            },
-            aspectRatio: '2.06 / 1',
-            filter: 'drop-shadow(0 30px 28px rgba(58,46,32,.2)) drop-shadow(0 4px 5px rgba(58,46,32,.14))',
-            ...rise(240, 1100),
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2.25,
+            px: 2.5,
+            pt: 'max(18px, env(safe-area-inset-top))',
+            pb: 2,
           }}
         >
-          <WorldMap world={world} region={config.region} interactive={false} vignette={false} still sheen />
+          <Box sx={{ ...rise(0, 1000), display: 'flex' }}>
+            <MiniGlobe world={world} region={config.region} size={116} />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="overline" sx={{ color: tokens.brick, display: 'block', ...rise(60) }}>
+              Pays & capitales
+            </Typography>
+            <Typography
+              variant="h1"
+              sx={{
+                mt: 0.25,
+                fontSize: '2.55rem',
+                lineHeight: 0.98,
+                letterSpacing: '-0.02em',
+                fontStyle: 'italic',
+                fontWeight: 500,
+                ...rise(120),
+              }}
+            >
+              Le Petit Atlas
+            </Typography>
+            <Typography sx={{ mt: 0.75, fontSize: '0.74rem', lineHeight: 1.35, color: tokens.inkSoft, ...rise(200) }}>
+              Géographie sur une carte d’atlas.
+            </Typography>
+          </Box>
         </Box>
-      </Box>
+      ) : (
+        <Box
+          sx={{
+            height: { md: '100%' },
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: { md: 'center' },
+            textAlign: 'center',
+            px: { xs: 2, md: 6 },
+            pt: { xs: 'max(22px, env(safe-area-inset-top))', md: 0 },
+            pb: { xs: 1.5, md: 0 },
+            background: {
+              md: 'radial-gradient(ellipse 75% 55% at 50% 52%, rgba(255,252,243,.85), rgba(243,234,212,0) 72%)',
+            },
+          }}
+        >
+          <Typography variant="overline" sx={{ color: tokens.brick, ...rise(0) }}>
+            Géographie · pays & capitales
+          </Typography>
+          <Typography
+            variant="h1"
+            sx={{
+              mt: 1,
+              fontSize: { xs: '3.1rem', sm: '4.2rem', md: 'clamp(4rem, 8.4vw, 7rem)' },
+              lineHeight: 1,
+              letterSpacing: '-0.025em',
+              fontStyle: 'italic',
+              fontWeight: 500,
+              ...rise(80),
+            }}
+          >
+            Le Petit Atlas
+          </Typography>
+          <Typography sx={{ mt: 1.5, maxWidth: '36ch', fontSize: '0.86rem', color: tokens.inkSoft, ...rise(160) }}>
+            Devine les pays et les capitales sur une carte d’atlas.
+          </Typography>
+          <Box
+            sx={{
+              mt: { xs: 3, md: 5.5 },
+              width: {
+                xs: '100%',
+                md: 'min(100%, 900px, calc((var(--app-h, 100dvh) - 360px) * 2.06))',
+              },
+              aspectRatio: '2.06 / 1',
+              filter: 'drop-shadow(0 30px 28px rgba(58,46,32,.2)) drop-shadow(0 4px 5px rgba(58,46,32,.14))',
+              ...rise(240, 1100),
+            }}
+          >
+            <WorldMap world={world} region={config.region} interactive={false} vignette={false} still sheen />
+          </Box>
+        </Box>
+      )}
 
       <Box
         sx={{
@@ -139,6 +183,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
           gridRow: { md: 1 },
           overflowY: { md: 'auto' },
           height: { md: '100%' },
+          flex: { xs: '1 0 auto' },
           display: 'flex',
           flexDirection: 'column',
         }}
