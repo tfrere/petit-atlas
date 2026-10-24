@@ -107,13 +107,22 @@ function Chrono({ read }: { read: () => number }) {
     const id = window.setInterval(() => setMs(read()), 100)
     return () => window.clearInterval(id)
   }, [read])
-  return <Stat label="Chrono" value={formatTime(ms)} />
+  return <Stat label="Chrono" value={formatTime(ms)} muted />
 }
 
-function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
+function Stat({ label, value, color, muted }: { label: string; value: string; color?: string; muted?: boolean }) {
   return (
     <Box sx={{ textAlign: 'center', minWidth: 56 }}>
-      <Typography sx={{ fontWeight: 600, fontSize: '1.2rem', lineHeight: 1, color }}>{value}</Typography>
+      <Typography
+        sx={{
+          fontWeight: muted ? 400 : 600,
+          fontSize: muted ? '0.95rem' : '1.2rem',
+          lineHeight: 1.26,
+          color: color ?? (muted ? tokens.inkSoft : undefined),
+        }}
+      >
+        {value}
+      </Typography>
       <Typography
         variant="overline"
         sx={{
@@ -153,7 +162,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
   const { resume, pause } = watch
 
   const q = questions[index]
-  const errors = answers.filter((a) => !a.ok).length
+  const score = answers.filter((a) => a.ok).length
   const locate = config.mode === 'locate'
 
   useEffect(() => {
@@ -372,7 +381,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
           ✕
         </Button>
         <Stat label="Question" value={`${index + 1}/${questions.length}`} />
-        <Stat label="Erreurs" value={String(errors)} color={errors ? tokens.wrong : undefined} />
+        <Stat label="Score" value={String(score)} color={score ? tokens.sage : undefined} />
         <Chrono read={watch.read} />
       </Box>
 

@@ -2,7 +2,7 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import Typography from '@mui/material/Typography'
-import { PENALTY_MS, formatTime } from '../game/records'
+import { formatTime } from '../game/records'
 import type { GameConfig, RecordEntry } from '../game/records'
 import { REGIONS } from '../data/regions'
 import { fontDisplay, tokens } from '../theme'
@@ -11,10 +11,9 @@ import type { Answer } from './Play'
 
 export interface FinishedGame {
   config: GameConfig
-  rawMs: number
   answers: Answer[]
-  finalMs: number
-  errors: number
+  score: number
+  ms: number
   isRecord: boolean
   previous: RecordEntry | null
 }
@@ -25,18 +24,8 @@ interface Props {
   onMenu: () => void
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.35 }}>
-      <Typography sx={{ color: tokens.inkSoft }}>{label}</Typography>
-      <Typography sx={{ fontWeight: 500 }}>{value}</Typography>
-    </Box>
-  )
-}
-
 export default function Result({ game, onReplay, onMenu }: Props) {
-  const { config, answers, errors, rawMs, finalMs, isRecord, previous } = game
-  const good = answers.length - errors
+  const { config, answers, score, ms, isRecord, previous } = game
   const missed = answers.filter((a) => !a.ok)
   const region = REGIONS.find((r) => r.id === config.region)?.label ?? ''
   const what = config.target === 'country' ? 'Pays' : 'Capitales'
@@ -74,14 +63,20 @@ export default function Result({ game, onReplay, onMenu }: Props) {
             sx={{
               fontFamily: fontDisplay,
               fontWeight: 500,
-              fontSize: '4rem',
+              fontSize: '4.6rem',
+              fontFeatureSettings: '"lnum" 1',
               lineHeight: 1,
-              color: isRecord ? tokens.brick : tokens.ink,
+              color: isRecord && score > 0 ? tokens.brick : tokens.ink,
             }}
           >
-            {formatTime(finalMs)}
+            {score}
+            <Box component="span" sx={{ fontSize: '2.2rem', color: tokens.inkSoft }}>
+              {' '}
+              / {answers.length}
+            </Box>
           </Typography>
-          {isRecord ? (
+          <Typography sx={{ mt: 0.75, color: tokens.inkSoft, fontSize: '0.9rem' }}>en {formatTime(ms)}</Typography>
+          {isRecord && score > 0 ? (
             <Chip
               label={previous ? 'Nouveau record !' : 'Premier record établi'}
               sx={{
@@ -89,32 +84,23 @@ export default function Result({ game, onReplay, onMenu }: Props) {
                 background: 'transparent',
                 color: tokens.brick,
                 border: `1px solid ${tokens.brick}`,
-                fontSize: '0.78rem',
-                letterSpacing: '0.16em',
+                fontSize: '0.74rem',
+                letterSpacing: '0.12em',
                 textTransform: 'uppercase',
                 fontWeight: 600,
               }}
             />
           ) : (
             previous && (
-              <Typography sx={{ mt: 0.75, color: tokens.inkSoft }}>
-                Record à battre : <strong>{formatTime(previous.ms)}</strong>
+              <Typography sx={{ mt: 1, color: tokens.inkSoft, fontSize: '0.85rem' }}>
+                Record : {previous.score} / {previous.total} en {formatTime(previous.ms)}
               </Typography>
             )
           )}
         </Box>
 
-        <Box sx={{ my: 1.5 }}>
-          <Row label="Bonnes réponses" value={`${good} / ${answers.length}`} />
-          <Row label="Temps réel" value={formatTime(rawMs)} />
-          <Row
-            label={`Pénalités (${errors} × ${PENALTY_MS / 1000} s)`}
-            value={`+ ${formatTime(errors * PENALTY_MS)}`}
-          />
-        </Box>
-
         {missed.length > 0 && (
-          <Box sx={{ mb: 2 }}>
+          <Box sx={{ my: 2 }}>
             <Typography variant="overline" sx={{ color: tokens.inkSoft, display: 'block', mb: 0.5 }}>
               À revoir
             </Typography>

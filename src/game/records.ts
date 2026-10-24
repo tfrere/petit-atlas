@@ -10,13 +10,13 @@ export interface GameConfig {
 }
 
 export interface RecordEntry {
+  score: number
+  total: number
   ms: number
-  errors: number
   at: number
 }
 
-export const PENALTY_MS = 5000
-const STORAGE_KEY = 'petit-atlas:records:v1'
+const STORAGE_KEY = 'petit-atlas:records:v2'
 const CONFIG_KEY = 'petit-atlas:config:v1'
 
 export const configKey = (c: GameConfig) => `${c.target}.${c.mode}.${c.region}.${c.count}`
@@ -33,10 +33,13 @@ export function getRecord(c: GameConfig): RecordEntry | null {
   return readAll()[configKey(c)] ?? null
 }
 
+/** Le score prime ; à score égal, le temps départage. */
+export const isBetter = (a: RecordEntry, b: RecordEntry) => a.score > b.score || (a.score === b.score && a.ms < b.ms)
+
 export function saveIfRecord(c: GameConfig, entry: RecordEntry): { isRecord: boolean; previous: RecordEntry | null } {
   const all = readAll()
   const previous = all[configKey(c)] ?? null
-  const isRecord = !previous || entry.ms < previous.ms
+  const isRecord = !previous || isBetter(entry, previous)
   if (isRecord) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...all, [configKey(c)]: entry }))

@@ -11,7 +11,7 @@ Jeu de géographie au chrono, pensé pour le mobile, sur une carte façon vieil 
 
 - Régions : Monde, Europe, Afrique, Asie, Amériques, Océanie.
 - Séries de 10, 20 ou toutes les questions de la région.
-- Le chrono sert au record : chaque erreur ajoute 5 s, le meilleur temps par configuration est gardé dans le `localStorage`.
+- Le score est le nombre de bonnes réponses ; le chrono n'est qu'une information en plus. Le meilleur score par configuration (à égalité, le plus rapide) est gardé dans le `localStorage`.
 - Saisie tolérante : accents, majuscules, tirets, « St/Saint », fautes de frappe (selon la longueur du nom) et noms alternatifs (« RDC », « Birmanie », « Kyiv »…). Une saisie qui correspond plus nettement à un autre pays est refusée (« Niger » ne valide pas « Nigeria »).
 
 ## Lancer en local

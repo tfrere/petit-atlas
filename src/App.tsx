@@ -6,7 +6,7 @@ import Typography from '@mui/material/Typography'
 import { loadFonts, wait } from './data/preload'
 import { loadWorld } from './data/world'
 import type { WorldData } from './data/world'
-import { PENALTY_MS, loadConfig, saveIfRecord, storeConfig } from './game/records'
+import { loadConfig, saveIfRecord, storeConfig } from './game/records'
 import type { GameConfig } from './game/records'
 import Home from './screens/Home'
 import Play from './screens/Play'
@@ -148,10 +148,10 @@ export default function App() {
   }
 
   const finish = (result: GameResult) => {
-    const errors = result.answers.filter((a) => !a.ok).length
-    const finalMs = Math.round(result.rawMs + errors * PENALTY_MS)
-    const { isRecord, previous } = saveIfRecord(config, { ms: finalMs, errors, at: Date.now() })
-    setScreen({ name: 'result', game: { config, ...result, finalMs, errors, isRecord, previous } })
+    const score = result.answers.filter((a) => a.ok).length
+    const ms = Math.round(result.rawMs)
+    const { isRecord, previous } = saveIfRecord(config, { score, total: result.answers.length, ms, at: Date.now() })
+    setScreen({ name: 'result', game: { config, answers: result.answers, score, ms, isRecord, previous } })
   }
 
   let content: React.ReactNode = null

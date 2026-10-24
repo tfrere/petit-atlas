@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { keyframes } from '@emotion/react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Typography from '@mui/material/Typography'
@@ -7,13 +8,23 @@ import type { RegionId } from '../data/types'
 import { COUNTRIES } from '../data/world'
 import type { WorldData } from '../data/world'
 import { completion } from '../game/progress'
-import { formatTime, getRecord } from '../game/records'
 import type { GameConfig } from '../game/records'
 import { poolFor } from '../game/targets'
 import type { PlayMode, TargetKind } from '../game/targets'
 import WorldMap from '../map/WorldMap'
-import { fontBody, fontDisplay, tokens } from '../theme'
+import { fontBody, tokens } from '../theme'
 import Segmented from '../ui/Segmented'
+
+const riseIn = keyframes`
+  from { opacity: 0; transform: translateY(16px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+`
+
+/** Entrée en cascade du hero ; désactivée si l'utilisateur réduit les animations. */
+const rise = (delayMs: number, durationMs = 900) => ({
+  animation: `${riseIn} ${durationMs}ms cubic-bezier(.2,.7,.2,1) ${delayMs}ms backwards`,
+  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+})
 
 interface Props {
   world: WorldData
@@ -48,7 +59,6 @@ const COUNTS = [10, 20, 0]
 
 export default function Home({ world, config, onChange, onPlay }: Props) {
   const total = useMemo(() => poolFor(config.target, config.region, COUNTRIES).length, [config.target, config.region])
-  const record = getRecord(config)
   const effectiveCount = config.count === 0 || config.count >= total ? total : config.count
 
   const withProgress = <T extends TargetKind | PlayMode>(
@@ -71,53 +81,55 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
         gridTemplateColumns: { md: 'minmax(0, 1fr) 500px' },
       }}
     >
-      <Box sx={{ position: 'relative', height: { md: '100%' }, pt: { xs: 1.5, md: 0 } }}>
-        <Box
+      <Box
+        sx={{
+          height: { md: '100%' },
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: { md: 'center' },
+          textAlign: 'center',
+          px: { xs: 2, md: 6 },
+          pt: { xs: 'max(22px, env(safe-area-inset-top))', md: 0 },
+          pb: { xs: 1.5, md: 0 },
+          background: {
+            md: 'radial-gradient(ellipse 75% 55% at 50% 52%, rgba(255,252,243,.85), rgba(243,234,212,0) 72%)',
+          },
+        }}
+      >
+        <Typography variant="overline" sx={{ color: tokens.brick, ...rise(0) }}>
+          Géographie · pays & capitales
+        </Typography>
+        <Typography
+          variant="h1"
           sx={{
-            position: { xs: 'relative', md: 'absolute' },
-            inset: { md: 0 },
-            aspectRatio: { xs: '2.1 / 1', md: 'auto' },
-            px: { xs: 0.5, md: 0 },
+            mt: 1,
+            fontSize: { xs: '3.1rem', sm: '4.2rem', md: 'clamp(4rem, 8.4vw, 7rem)' },
+            lineHeight: 1,
+            letterSpacing: '-0.025em',
+            fontStyle: 'italic',
+            fontWeight: 500,
+            ...rise(80),
           }}
         >
-          <WorldMap
-            world={world}
-            region={config.region}
-            interactive={false}
-            vignette={false}
-            view={{ key: config.region }}
-          />
-        </Box>
-
+          Le Petit Atlas
+        </Typography>
+        <Typography sx={{ mt: 1.5, maxWidth: '36ch', fontSize: '0.86rem', color: tokens.inkSoft, ...rise(160) }}>
+          Devine les pays et les capitales sur une carte d’atlas.
+        </Typography>
         <Box
           sx={{
-            position: { xs: 'relative', md: 'absolute' },
-            left: 0,
-            right: 0,
-            bottom: 0,
-            mt: { xs: 0.5, md: 0 },
-            px: { xs: 3, md: 7 },
-            pb: { md: 7 },
-            textAlign: { xs: 'center', md: 'left' },
-            pointerEvents: 'none',
+            mt: { xs: 3, md: 5.5 },
+            width: {
+              xs: '100%',
+              md: 'min(100%, 900px, calc((var(--app-h, 100dvh) - 360px) * 2.06))',
+            },
+            aspectRatio: '2.06 / 1',
+            filter: 'drop-shadow(0 30px 28px rgba(58,46,32,.2)) drop-shadow(0 4px 5px rgba(58,46,32,.14))',
+            ...rise(240, 1100),
           }}
         >
-          <Typography variant="overline" sx={{ color: tokens.brick, display: 'block' }}>
-            Géographie au chrono
-          </Typography>
-          <Typography
-            variant="h1"
-            sx={{
-              fontSize: { xs: '3.2rem', md: '5.2rem' },
-              lineHeight: 0.95,
-              mt: 0.5,
-              fontFamily: fontDisplay,
-              fontStyle: 'italic',
-              textShadow: `0 0 18px ${tokens.paper}, 0 0 8px ${tokens.paper}, 0 0 3px ${tokens.paper}`,
-            }}
-          >
-            Le Petit Atlas
-          </Typography>
+          <WorldMap world={world} region={config.region} interactive={false} vignette={false} still sheen />
         </Box>
       </Box>
 
@@ -205,9 +217,6 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
               options={COUNTS.map((n) => ({ value: n, label: n === 0 ? `Tous · ${total}` : String(n) }))}
               onChange={(v: number) => set({ count: v })}
             />
-            <Typography sx={{ mt: 1, fontSize: '0.85rem', color: tokens.inkSoft, fontStyle: 'italic' }}>
-              Chaque erreur ajoute 5 secondes au chrono.
-            </Typography>
           </Section>
         </Box>
 
@@ -222,31 +231,6 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
           }}
         >
           <Box sx={{ width: '100%', maxWidth: 520, mx: 'auto' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1.25 }}>
-              <Typography variant="overline" sx={{ color: tokens.inkSoft }}>
-                Record
-              </Typography>
-              <Typography sx={{ fontWeight: 600, fontSize: '1.1rem', lineHeight: 1 }}>
-                {record ? (
-                  <>
-                    {formatTime(record.ms)}
-                    <Typography
-                      component="span"
-                      sx={{ fontSize: '0.92rem', color: tokens.inkSoft, ml: 1, fontFamily: fontBody, fontWeight: 400 }}
-                    >
-                      {record.errors} erreur{record.errors > 1 ? 's' : ''}
-                    </Typography>
-                  </>
-                ) : (
-                  <Typography
-                    component="span"
-                    sx={{ fontSize: '1.05rem', fontWeight: 400, fontStyle: 'italic', color: tokens.inkSoft }}
-                  >
-                    à établir
-                  </Typography>
-                )}
-              </Typography>
-            </Box>
             <Button fullWidth variant="contained" color="primary" size="large" onClick={onPlay} sx={{ minHeight: 54 }}>
               Jouer · {effectiveCount} questions
             </Button>

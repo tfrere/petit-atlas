@@ -61,6 +61,10 @@ interface Props {
   tapRings?: boolean
   /** Remplit tout le cadre, même en vue monde (bords du globe rognés). */
   cover?: boolean
+  /** Vue figée sur le globe entier : la région choisie est seulement mise en valeur (les autres pays s'estompent). */
+  still?: boolean
+  /** Léger reflet de lumière sur le globe, façon objet posé. */
+  sheen?: boolean
   /** Ombre intérieure façon papier ancien (activée par défaut). */
   vignette?: boolean
   onTap?: (tap: TapInfo) => void
@@ -201,6 +205,8 @@ export default function WorldMap({
   tapRings = false,
   cover = false,
   vignette = true,
+  still = false,
+  sheen = false,
   onTap,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -267,7 +273,7 @@ export default function WorldMap({
 
   const computeTransform = useCallback(
     (v: MapView | undefined): ZoomTransform => {
-      if (!geo) return zoomIdentity
+      if (!geo || still) return zoomIdentity
       let box: Bounds | null = null
       const chunks: Bounds[] = []
       for (const id of v?.ids ?? []) {
@@ -324,7 +330,7 @@ export default function WorldMap({
           )
         : raw
     },
-    [geo, world, region, w, h, cover],
+    [geo, world, region, w, h, cover, still],
   )
 
   useEffect(() => {
@@ -425,6 +431,7 @@ export default function WorldMap({
           strokeWidth: 0.45,
           vectorEffect: 'non-scaling-stroke',
           strokeLinejoin: 'round',
+          transition: 'fill .45s ease',
         },
         '& .land path[data-dim]': { strokeOpacity: 0.4 },
       }}
@@ -467,6 +474,18 @@ export default function WorldMap({
                 />
               ))}
             </g>
+            {sheen && (
+              <>
+                <defs>
+                  <linearGradient id="atlas-sheen" x1="0" y1="0" x2="0.6" y2="1">
+                    <stop offset="0" stopColor="#fff" stopOpacity="0.5" />
+                    <stop offset="0.45" stopColor="#fff" stopOpacity="0" />
+                    <stop offset="1" stopColor="#3a2e20" stopOpacity="0.14" />
+                  </linearGradient>
+                </defs>
+                <path d={geo.sphereD} fill="url(#atlas-sheen)" pointerEvents="none" />
+              </>
+            )}
             <g className="land" pointerEvents="none">
               {highlighted.map(([id, kind]) => {
                 const s = geo.shapes.find((x) => x.id === id)
