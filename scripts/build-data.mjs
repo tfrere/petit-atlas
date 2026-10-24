@@ -189,9 +189,7 @@ for (const c of sovereign) {
       fr,
       en,
       aliases: [
-        ...new Set(
-          [en, x.fr, ...(x === primary ? (CAPITAL_ALIASES[iso] ?? []) : [])].filter((n) => n && n !== fr),
-        ),
+        ...new Set([en, x.fr, ...(x === primary ? (CAPITAL_ALIASES[iso] ?? []) : [])].filter((n) => n && n !== fr)),
       ],
       lon: round(x.coord[0]),
       lat: round(x.coord[1]),

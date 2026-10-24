@@ -62,9 +62,22 @@ export default function Result({ game, onReplay, onMenu }: Props) {
           Série terminée
         </Typography>
 
-        <Box sx={{ textAlign: 'center', py: 1.5, borderTop: `1px dashed ${tokens.inkSoft}`, borderBottom: `1px dashed ${tokens.inkSoft}` }}>
+        <Box
+          sx={{
+            textAlign: 'center',
+            py: 1.5,
+            borderTop: `1px dashed ${tokens.inkSoft}`,
+            borderBottom: `1px dashed ${tokens.inkSoft}`,
+          }}
+        >
           <Typography
-            sx={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: '3.6rem', lineHeight: 1, color: isRecord ? tokens.brick : tokens.ink }}
+            sx={{
+              fontFamily: fontDisplay,
+              fontWeight: 700,
+              fontSize: '3.6rem',
+              lineHeight: 1,
+              color: isRecord ? tokens.brick : tokens.ink,
+            }}
           >
             {formatTime(finalMs)}
           </Typography>
@@ -85,7 +98,10 @@ export default function Result({ game, onReplay, onMenu }: Props) {
         <Box sx={{ my: 1.5 }}>
           <Row label="Bonnes réponses" value={`${good} / ${answers.length}`} />
           <Row label="Temps réel" value={formatTime(rawMs)} />
-          <Row label={`Pénalités (${errors} × ${PENALTY_MS / 1000} s)`} value={`+ ${formatTime(errors * PENALTY_MS)}`} />
+          <Row
+            label={`Pénalités (${errors} × ${PENALTY_MS / 1000} s)`}
+            value={`+ ${formatTime(errors * PENALTY_MS)}`}
+          />
         </Box>
 
         {missed.length > 0 && (
@@ -99,9 +115,7 @@ export default function Result({ game, onReplay, onMenu }: Props) {
                   key={a.question.id}
                   variant="outlined"
                   label={
-                    a.question.kind === 'capital'
-                      ? `${a.question.label} · ${a.question.countryName}`
-                      : a.question.label
+                    a.question.kind === 'capital' ? `${a.question.label} · ${a.question.countryName}` : a.question.label
                   }
                   sx={{ borderColor: tokens.ink, color: tokens.ink, background: 'rgba(155,45,48,.08)' }}
                 />

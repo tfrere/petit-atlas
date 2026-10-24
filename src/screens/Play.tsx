@@ -68,9 +68,11 @@ function makeNameView(world: WorldData, question: Question, key: number): MapVie
 function useStopwatch() {
   const acc = useRef(0)
   const startedAt = useRef<number | null>(null)
-  const [elapsed, setElapsed] = useState(0)
 
-  const read = useCallback(() => acc.current + (startedAt.current === null ? 0 : performance.now() - startedAt.current), [])
+  const read = useCallback(
+    () => acc.current + (startedAt.current === null ? 0 : performance.now() - startedAt.current),
+    [],
+  )
   const resume = useCallback(() => {
     if (startedAt.current === null) startedAt.current = performance.now()
   }, [])
@@ -79,15 +81,18 @@ function useStopwatch() {
       acc.current += performance.now() - startedAt.current
       startedAt.current = null
     }
-    setElapsed(acc.current)
   }, [])
 
+  return { resume, pause, read }
+}
+
+function Chrono({ read }: { read: () => number }) {
+  const [ms, setMs] = useState(0)
   useEffect(() => {
-    const id = window.setInterval(() => setElapsed(read()), 100)
+    const id = window.setInterval(() => setMs(read()), 100)
     return () => window.clearInterval(id)
   }, [read])
-
-  return { elapsed, resume, pause, read }
+  return <Stat label="Chrono" value={formatTime(ms)} />
 }
 
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
@@ -96,7 +101,10 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
       <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: '1.35rem', lineHeight: 1, color }}>
         {value}
       </Typography>
-      <Typography variant="overline" sx={{ fontSize: '0.62rem', color: tokens.inkSoft, lineHeight: 1.2, display: 'block' }}>
+      <Typography
+        variant="overline"
+        sx={{ fontSize: '0.62rem', color: tokens.inkSoft, lineHeight: 1.2, display: 'block' }}
+      >
         {label}
       </Typography>
     </Box>
@@ -344,7 +352,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
         </Button>
         <Stat label="Question" value={`${index + 1}/${questions.length}`} />
         <Stat label="Erreurs" value={String(errors)} color={errors ? tokens.wrong : undefined} />
-        <Stat label="Chrono" value={formatTime(watch.elapsed)} />
+        <Chrono read={watch.read} />
       </Box>
 
       <Box
@@ -439,75 +447,86 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
             pb: 'max(10px, env(safe-area-inset-bottom))',
           }}
         >
-          {phase !== 'asking' && (
-            <Typography
-              sx={{
-                fontFamily: fontDisplay,
-                fontWeight: 700,
-                fontSize: '1.25rem',
-                lineHeight: 1.15,
-                mb: 0.75,
-                color: phase === 'correct' ? tokens.sage : tokens.wrong,
-              }}
-            >
-              {phase === 'correct' ? `Exact : ${q.label}` : `C’était : ${q.label}`}
-              {phase === 'wrong' && wrongDetail && (
-                <Typography component="span" sx={{ display: 'block', fontSize: '0.9rem', fontWeight: 400, color: tokens.inkSoft, fontFamily: 'inherit' }}>
-                  {wrongDetail}
-                </Typography>
-              )}
-            </Typography>
-          )}
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Box
-              component="input"
-              ref={inputRef}
-              value={text}
-              readOnly={phase !== 'asking'}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setText(e.target.value)}
-              placeholder={q.kind === 'country' ? 'Nom du pays…' : 'Nom de la capitale…'}
-              autoFocus
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="words"
-              spellCheck={false}
-              enterKeyHint="go"
-              aria-label="Ta réponse"
-              sx={{
-                flex: 1,
-                minWidth: 0,
-                height: 52,
-                px: 1.5,
-                fontFamily: fontDisplay,
-                fontWeight: 700,
-                fontSize: '1.45rem',
-                color: phase === 'correct' ? tokens.sage : phase === 'wrong' ? tokens.wrong : tokens.ink,
-                background: '#fbf5e6',
-                border: `1.5px solid ${tokens.ink}`,
-                borderRadius: '3px',
-                outline: 'none',
-                '&:focus': { boxShadow: `0 0 0 3px rgba(180,71,42,.35)` },
-                '&::placeholder': { color: 'rgba(93,76,55,.55)', fontWeight: 600, fontStyle: 'italic' },
-              }}
-            />
-            <Button
-              type="submit"
-              variant="contained"
-              onMouseDown={(e) => e.preventDefault()}
-              sx={{ minWidth: 104, height: 52 }}
-            >
-              {phase === 'asking' ? 'Valider' : 'Suite'}
-            </Button>
+          <Box sx={{ maxWidth: 640, mx: 'auto' }}>
+            {phase !== 'asking' && (
+              <Typography
+                sx={{
+                  fontFamily: fontDisplay,
+                  fontWeight: 700,
+                  fontSize: '1.25rem',
+                  lineHeight: 1.15,
+                  mb: 0.75,
+                  color: phase === 'correct' ? tokens.sage : tokens.wrong,
+                }}
+              >
+                {phase === 'correct' ? `Exact : ${q.label}` : `C’était : ${q.label}`}
+                {phase === 'wrong' && wrongDetail && (
+                  <Typography
+                    component="span"
+                    sx={{
+                      display: 'block',
+                      fontSize: '0.9rem',
+                      fontWeight: 400,
+                      color: tokens.inkSoft,
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {wrongDetail}
+                  </Typography>
+                )}
+              </Typography>
+            )}
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Box
+                component="input"
+                ref={inputRef}
+                value={text}
+                readOnly={phase !== 'asking'}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setText(e.target.value)}
+                placeholder={q.kind === 'country' ? 'Nom du pays…' : 'Nom de la capitale…'}
+                autoFocus
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="words"
+                spellCheck={false}
+                enterKeyHint="go"
+                aria-label="Ta réponse"
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  height: 52,
+                  px: 1.5,
+                  fontFamily: fontDisplay,
+                  fontWeight: 700,
+                  fontSize: '1.45rem',
+                  color: phase === 'correct' ? tokens.sage : phase === 'wrong' ? tokens.wrong : tokens.ink,
+                  background: '#fbf5e6',
+                  border: `1.5px solid ${tokens.ink}`,
+                  borderRadius: '3px',
+                  outline: 'none',
+                  '&:focus': { boxShadow: `0 0 0 3px rgba(180,71,42,.35)` },
+                  '&::placeholder': { color: 'rgba(93,76,55,.55)', fontWeight: 600, fontStyle: 'italic' },
+                }}
+              />
+              <Button
+                type="submit"
+                variant="contained"
+                onMouseDown={(e) => e.preventDefault()}
+                sx={{ minWidth: 104, height: 52 }}
+              >
+                {phase === 'asking' ? 'Valider' : 'Suite'}
+              </Button>
+            </Box>
+            {phase === 'asking' && (
+              <Button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={skip}
+                sx={{ mt: 0.5, minHeight: 36, color: tokens.inkSoft, textDecoration: 'underline', fontSize: '0.95rem' }}
+              >
+                Je passe
+              </Button>
+            )}
           </Box>
-          {phase === 'asking' && (
-            <Button
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={skip}
-              sx={{ mt: 0.5, minHeight: 36, color: tokens.inkSoft, textDecoration: 'underline', fontSize: '0.95rem' }}
-            >
-              Je passe
-            </Button>
-          )}
         </Box>
       )}
 

@@ -1,7 +1,12 @@
 import type { Feature, MultiPolygon, Polygon } from 'geojson'
 import { geoArea, geoCentroid } from 'd3-geo'
 import { feature, merge, neighbors } from 'topojson-client'
-import type { GeometryCollection, MultiPolygon as MultiPolygon_, Polygon as Polygon_, Topology } from 'topojson-specification'
+import type {
+  GeometryCollection,
+  MultiPolygon as MultiPolygon_,
+  Polygon as Polygon_,
+  Topology,
+} from 'topojson-specification'
 import countriesJson from './countries.json'
 import type { Country } from './types'
 
@@ -43,7 +48,8 @@ function focusOf(f: Feature<Polygon | MultiPolygon>): Feature<Polygon | MultiPol
 
 function colorShapes(ids: string[], adjacency: Map<string, Set<string>>, weight: Map<string, number>) {
   const order = [...ids].sort(
-    (a, b) => (adjacency.get(b)?.size ?? 0) - (adjacency.get(a)?.size ?? 0) || (weight.get(b) ?? 0) - (weight.get(a) ?? 0),
+    (a, b) =>
+      (adjacency.get(b)?.size ?? 0) - (adjacency.get(a)?.size ?? 0) || (weight.get(b) ?? 0) - (weight.get(a) ?? 0),
   )
   const colors = new Map<string, number>()
   for (const id of order) {
@@ -90,7 +96,11 @@ export function prepareWorld(topology: Topology): WorldData {
     if (list.length === 1) {
       f = feature(topology, list[0]) as Feature<Polygon | MultiPolygon>
     } else {
-      f = { type: 'Feature', properties: {}, geometry: merge(topology, list as unknown as (Polygon_ | MultiPolygon_)[]) as MultiPolygon }
+      f = {
+        type: 'Feature',
+        properties: {},
+        geometry: merge(topology, list as unknown as (Polygon_ | MultiPolygon_)[]) as MultiPolygon,
+      }
     }
     const focus = focusOf(f)
     const name = COUNTRY_BY_ID.get(id)?.name ?? (list[0].properties as { name?: string } | undefined)?.name ?? id

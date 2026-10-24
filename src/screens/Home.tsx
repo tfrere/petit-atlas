@@ -105,7 +105,10 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             <ToggleButton value="name">
               <Box>
                 Je nomme
-                <Typography component="span" sx={{ display: 'block', fontSize: '0.8rem', opacity: 0.75, fontWeight: 400 }}>
+                <Typography
+                  component="span"
+                  sx={{ display: 'block', fontSize: '0.8rem', opacity: 0.75, fontWeight: 400 }}
+                >
                   la carte → j’écris
                 </Typography>
               </Box>
@@ -113,7 +116,10 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             <ToggleButton value="locate">
               <Box>
                 Je situe
-                <Typography component="span" sx={{ display: 'block', fontSize: '0.8rem', opacity: 0.75, fontWeight: 400 }}>
+                <Typography
+                  component="span"
+                  sx={{ display: 'block', fontSize: '0.8rem', opacity: 0.75, fontWeight: 400 }}
+                >
                   le nom → je touche
                 </Typography>
               </Box>
@@ -136,7 +142,11 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
                     minHeight: 40,
                     px: 1.5,
                     fontSize: '1rem',
-                    ...(selected && { background: tokens.ink, color: '#fbf5e6', '&:hover': { background: tokens.ink } }),
+                    ...(selected && {
+                      background: tokens.ink,
+                      color: '#fbf5e6',
+                      '&:hover': { background: tokens.ink },
+                    }),
                   }}
                 >
                   {r.label}
@@ -177,22 +187,37 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             {record ? (
               <>
                 {formatTime(record.ms)}
-                <Typography component="span" sx={{ fontSize: '0.95rem', color: tokens.inkSoft, ml: 1, fontFamily: 'inherit' }}>
+                <Typography
+                  component="span"
+                  sx={{ fontSize: '0.95rem', color: tokens.inkSoft, ml: 1, fontFamily: 'inherit' }}
+                >
                   {record.errors} erreur{record.errors > 1 ? 's' : ''}
                 </Typography>
               </>
             ) : (
-              <Typography component="span" sx={{ fontSize: '1rem', fontWeight: 400, fontStyle: 'italic', color: tokens.inkSoft }}>
+              <Typography
+                component="span"
+                sx={{ fontSize: '1rem', fontWeight: 400, fontStyle: 'italic', color: tokens.inkSoft }}
+              >
                 à établir
               </Typography>
             )}
           </Typography>
         </Box>
 
-        <Button fullWidth variant="contained" color="primary" size="large" onClick={onPlay} sx={{ minHeight: 56, fontSize: '1.25rem' }}>
+        <Button
+          fullWidth
+          variant="contained"
+          color="primary"
+          size="large"
+          onClick={onPlay}
+          sx={{ minHeight: 56, fontSize: '1.25rem' }}
+        >
           Jouer · {effectiveCount} questions
         </Button>
-        <Typography sx={{ textAlign: 'center', mt: 1.25, fontSize: '0.85rem', color: tokens.inkSoft, fontStyle: 'italic' }}>
+        <Typography
+          sx={{ textAlign: 'center', mt: 1.25, fontSize: '0.85rem', color: tokens.inkSoft, fontStyle: 'italic' }}
+        >
           Chaque erreur ajoute 5 s au chrono.
         </Typography>
       </Cartouche>

@@ -168,7 +168,12 @@ function CompassRose() {
       <circle r="34" fill="none" stroke="currentColor" strokeWidth="1" />
       <circle r="28" fill="none" stroke="currentColor" strokeWidth="0.5" />
       <path d="M0,-44 L7,-7 L0,0 Z M0,44 L-7,7 L0,0 Z M44,0 L7,7 L0,0 Z M-44,0 L-7,-7 L0,0 Z" fill="currentColor" />
-      <path d="M0,-44 L-7,-7 L0,0 Z M0,44 L7,7 L0,0 Z M44,0 L7,-7 L0,0 Z M-44,0 L-7,7 L0,0 Z" fill="none" stroke="currentColor" strokeWidth="0.8" />
+      <path
+        d="M0,-44 L-7,-7 L0,0 Z M0,44 L7,7 L0,0 Z M44,0 L7,-7 L0,0 Z M-44,0 L-7,7 L0,0 Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="0.8"
+      />
       <path d="M0,0 L22,-22 M0,0 L-22,-22 M0,0 L22,22 M0,0 L-22,22" stroke="currentColor" strokeWidth="0.6" />
       <text y="-47.5" textAnchor="middle" fontSize="12" fontFamily={fontDisplay} fontWeight="700" fill="currentColor">
         N
@@ -406,7 +411,13 @@ export default function WorldMap({
       >
         {geo && (
           <g ref={gRef}>
-            <path d={geo.sphereD} fill={tokens.ocean} stroke={tokens.ink} strokeWidth={1.4} vectorEffect="non-scaling-stroke" />
+            <path
+              d={geo.sphereD}
+              fill={tokens.ocean}
+              stroke={tokens.ink}
+              strokeWidth={1.4}
+              vectorEffect="non-scaling-stroke"
+            />
             <path
               d={geo.graticuleD}
               fill="none"
@@ -421,11 +432,7 @@ export default function WorldMap({
                 <ShapePath key={s.id} id={s.id} d={s.d} color={tokens.land[s.colorIndex]} />
               ))}
             </g>
-            <g
-              className="land"
-              pointerEvents="none"
-              style={{ filter: 'drop-shadow(0 0 0.5px rgba(46,36,24,.6))' }}
-            >
+            <g className="land" pointerEvents="none" style={{ filter: 'drop-shadow(0 0 0.5px rgba(46,36,24,.6))' }}>
               {highlighted.map(([id, kind]) => {
                 const s = geo.shapes.find((x) => x.id === id)
                 return s ? <path key={id} d={s.d} fill={KIND_FILL[kind]} style={{ strokeWidth: 1.2 }} /> : null

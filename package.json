@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "data": "node scripts/build-data.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
