@@ -58,6 +58,10 @@ interface Props {
   interactive?: boolean
   /** Affiche des pastilles tactiles autour des micro-États pour les rendre faciles à toucher. */
   tapRings?: boolean
+  /** Remplit tout le cadre, même en vue monde (bords du globe rognés). */
+  cover?: boolean
+  /** Ombre intérieure façon papier ancien (activée par défaut). */
+  vignette?: boolean
   onTap?: (tap: TapInfo) => void
 }
 
@@ -192,6 +196,8 @@ export default function WorldMap({
   view,
   interactive = true,
   tapRings = false,
+  cover = false,
+  vignette = true,
   onTap,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -269,7 +275,22 @@ export default function WorldMap({
         box = unionBounds(chunks)
       } else {
         const r = regionById(region)
-        if (r.id === 'world') return zoomIdentity
+        if (r.id === 'world') {
+          if (!cover) return zoomIdentity
+          const [[x0, y0], [x1, y1]] = geo.sphereBounds
+          const k = Math.max(1, h / geo.sphereHeight, w / geo.sphereWidth) * 1.12
+          const t = zoomIdentity.translate(w / 2 - (k * (x0 + x1)) / 2, h / 2 - (k * (y0 + y1)) / 2).scale(k)
+          return (
+            zoomRef.current?.constrain()(
+              t,
+              [
+                [0, 0],
+                [w, h],
+              ],
+              geo.sphereBounds,
+            ) ?? t
+          )
+        }
         box = regionBounds(r.box, geo.projection)
       }
       const minSpan = geo.sphereWidth * (chunks.length ? (v?.minSpan ?? 0.07) : 0)
@@ -295,7 +316,7 @@ export default function WorldMap({
           )
         : raw
     },
-    [geo, world, region, w, h],
+    [geo, world, region, w, h, cover],
   )
 
   useEffect(() => {
@@ -566,14 +587,16 @@ export default function WorldMap({
         />
       )}
 
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          pointerEvents: 'none',
-          boxShadow: 'inset 0 0 36px rgba(120,90,50,.28), inset 0 0 0 1px rgba(58,46,32,.2)',
-        }}
-      />
+      {vignette && (
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            boxShadow: 'inset 0 0 36px rgba(120,90,50,.28), inset 0 0 0 1px rgba(58,46,32,.2)',
+          }}
+        />
+      )}
 
       {interactive && <CompassRose />}
 
