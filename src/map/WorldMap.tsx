@@ -215,7 +215,6 @@ export default function WorldMap({
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const gRef = useRef<SVGGElement>(null)
-  const ringsRef = useRef<SVGGElement>(null)
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null)
   const firstView = useRef(true)
   const { w, h } = useElementSize(wrapRef)
@@ -245,10 +244,19 @@ export default function WorldMap({
       [-180, MAP_LAT_MIN],
       [180, MAP_LAT_MAX],
     ])
+    const wrapX = interactive && !still
+    const panExtent: Bounds = wrapX
+      ? [
+          [-Infinity, y0],
+          [Infinity, y1],
+        ]
+      : sphereBounds
     return {
       projection,
       path,
       sphereBounds,
+      panExtent,
+      wrapX,
       sphereWidth: x1 - x0,
       sphereHeight: y1 - y0,
       sphereD: `M${x0 + r},${y0}H${x1 - r}A${r},${r} 0 0 1 ${x1},${y0 + r}V${y1 - r}A${r},${r} 0 0 1 ${x1 - r},${y1}H${x0 + r}A${r},${r} 0 0 1 ${x0},${y1 - r}V${y0 + r}A${r},${r} 0 0 1 ${x0 + r},${y0}Z`,
@@ -256,12 +264,14 @@ export default function WorldMap({
       shapes,
       landD: shapes.map((s) => s.d).join(''),
     }
-  }, [world, w, h, still])
+  }, [world, w, h, still, interactive])
 
   const inScope = useMemo(
     () => (region === 'world' ? null : new Set(COUNTRIES.filter((c) => c.region === region).map((c) => c.id))),
     [region],
   )
+
+  const offsets = useMemo(() => (geo?.wrapX ? [-geo.sphereWidth, 0, geo.sphereWidth] : [0]), [geo])
 
   const rings = useMemo(() => {
     if (!geo) return []
@@ -274,15 +284,26 @@ export default function WorldMap({
       .filter((r): r is { id: string; x: number; y: number } => !!r)
   }, [geo, world, inScope])
 
+  const wrapTransform = useCallback(
+    (t: ZoomTransform): ZoomTransform => {
+      if (!geo?.wrapX) return t
+      const width = geo.sphereWidth
+      const x0 = geo.sphereBounds[0][0]
+      const left = -t.x / t.k
+      const wrapped = x0 + ((((left - x0 + width / 2) % width) + width) % width) - width / 2
+      return Math.abs(wrapped - left) < 1e-6 ? t : zoomIdentity.translate(-wrapped * t.k, t.y).scale(t.k)
+    },
+    [geo],
+  )
+
   const syncZoomDecor = useCallback((t: ZoomTransform) => {
     gRef.current?.setAttribute('transform', t.toString())
     svgRef.current?.style.setProperty('--inv-k', String(1 / t.k))
-    const rg = ringsRef.current
-    if (rg) {
-      const fade = Math.max(0, Math.min(1, (22 - t.k) / 10))
+    const fade = Math.max(0, Math.min(1, (22 - t.k) / 10))
+    svgRef.current?.querySelectorAll<SVGGElement>('.rings').forEach((rg) => {
       rg.style.opacity = String(fade)
       rg.style.pointerEvents = fade < 0.2 ? 'none' : 'all'
-    }
+    })
   }, [])
 
   const computeTransform = useCallback(
@@ -315,7 +336,7 @@ export default function WorldMap({
                 [0, 0],
                 [w, h],
               ],
-              geo.sphereBounds,
+              geo.panExtent,
             ) ?? t
           )
         }
@@ -340,7 +361,7 @@ export default function WorldMap({
               [0, 0],
               [w, h],
             ],
-            geo.sphereBounds,
+            geo.panExtent,
           )
         : raw
     },
@@ -356,9 +377,13 @@ export default function WorldMap({
         [0, 0],
         [w, h],
       ])
-      .translateExtent(geo.sphereBounds)
+      .translateExtent(geo.panExtent)
       .filter((e: Event) => interactive && e.type === 'wheel')
-      .on('zoom', (e) => syncZoomDecor(e.transform))
+      .on('zoom', (e) => {
+        const t = wrapTransform(e.transform)
+        if (t !== e.transform) svg.property('__zoom', t)
+        syncZoomDecor(t)
+      })
     svg.call(behavior)
     zoomRef.current = behavior
     syncZoomDecor(zoomTransform(svgRef.current))
@@ -367,14 +392,20 @@ export default function WorldMap({
       svg.on('.zoom', null)
       svg.interrupt()
     }
-  }, [geo, w, h, interactive, syncZoomDecor])
+  }, [geo, w, h, interactive, syncZoomDecor, wrapTransform])
 
   const viewKey = view?.key
   const regionKey = region
   useEffect(() => {
     if (!geo || !svgRef.current || !zoomRef.current) return
-    const target = computeTransform(view)
+    let target = computeTransform(view)
     const svg = select(svgRef.current)
+    if (geo.wrapX) {
+      const cur = zoomTransform(svgRef.current)
+      const shift = Math.round(((w / 2 - cur.x) / cur.k - (w / 2 - target.x) / target.k) / geo.sphereWidth)
+      if (shift)
+        target = zoomIdentity.translate(target.x - shift * geo.sphereWidth * target.k, target.y).scale(target.k)
+    }
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     const instant = firstView.current || view?.animate === false || reduce
     firstView.current = false
@@ -407,7 +438,7 @@ export default function WorldMap({
           [0, 0],
           [w, h],
         ],
-        geo.sphereBounds,
+        geo.panExtent,
       )
       select(svgRef.current).call(zoomRef.current.transform, t)
     },
@@ -539,7 +570,12 @@ export default function WorldMap({
     const sx = e.clientX - rect.left
     const sy = e.clientY - rect.top
     const transform = zoomTransform(svgRef.current)
-    const [px, py] = transform.invert([sx, sy])
+    const [rawX, py] = transform.invert([sx, sy])
+    let px = rawX
+    if (geo.wrapX) {
+      const x0 = geo.sphereBounds[0][0]
+      px = x0 + ((((px - x0) % geo.sphereWidth) + geo.sphereWidth) % geo.sphereWidth)
+    }
     const lonlat = geo.projection.invert?.([px, py])
     const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-id]')
     const id = hit?.getAttribute('data-id') ?? null
@@ -557,8 +593,10 @@ export default function WorldMap({
       if (m.kind !== 'guess') return false
       const mp = geo.projection([m.lon, m.lat])
       if (!mp) return false
-      const [mx, my] = transform.apply(mp)
-      return Math.hypot(mx - sx, my - sy) < SELECT_RADIUS_PX
+      return offsets.some((dx) => {
+        const [mx, my] = transform.apply([mp[0] + dx, mp[1]])
+        return Math.hypot(mx - sx, my - sy) < SELECT_RADIUS_PX
+      })
     })
     onTap({ id, lon: valid ? lonlat![0] : null, lat: valid ? lonlat![1] : null, nearSelected })
   }
@@ -571,6 +609,7 @@ export default function WorldMap({
   useEffect(() => stopFling, [])
 
   const highlighted = Object.entries(highlights)
+
   const project = (lon: number, lat: number) => geo?.projection([lon, lat]) ?? null
   const lineD = geo && line ? geo.path({ type: 'LineString', coordinates: line }) : null
 
@@ -608,145 +647,159 @@ export default function WorldMap({
       >
         {geo && (
           <g ref={gRef}>
-            <path
-              d={geo.sphereD}
-              fill={tokens.ocean}
-              stroke={tokens.ink}
-              strokeWidth={1.4}
-              vectorEffect="non-scaling-stroke"
-            />
-            <path
-              d={geo.graticuleD}
-              fill="none"
-              stroke="rgba(46,36,24,.22)"
-              strokeWidth={0.5}
-              strokeDasharray="2 3"
-              vectorEffect="non-scaling-stroke"
-              pointerEvents="none"
-            />
-            <g className="land">
-              {geo.shapes.map((s) => (
-                <ShapePath
-                  key={s.id}
-                  id={s.id}
-                  d={s.d}
-                  color={tokens.land[s.colorIndex]}
-                  dim={!!inScope && !inScope.has(s.id)}
+            {offsets.map((dx) => (
+              <g key={dx} transform={dx ? `translate(${dx},0)` : undefined}>
+                <path
+                  d={geo.sphereD}
+                  fill={tokens.ocean}
+                  stroke={geo.wrapX ? 'none' : tokens.ink}
+                  strokeWidth={1.4}
+                  vectorEffect="non-scaling-stroke"
                 />
-              ))}
-            </g>
-            {sheen && (
-              <>
-                <defs>
-                  <linearGradient id="atlas-sheen" x1="0" y1="0" x2="0.6" y2="1">
-                    <stop offset="0" stopColor="#fff" stopOpacity="0.5" />
-                    <stop offset="0.45" stopColor="#fff" stopOpacity="0" />
-                    <stop offset="1" stopColor="#3a2e20" stopOpacity="0.14" />
-                  </linearGradient>
-                </defs>
-                <path d={geo.sphereD} fill="url(#atlas-sheen)" pointerEvents="none" />
-              </>
-            )}
-            <g className="land" pointerEvents="none">
-              {highlighted.map(([id, kind]) => {
-                const s = geo.shapes.find((x) => x.id === id)
-                return s ? (
+                {geo.wrapX && (
                   <path
-                    key={id}
-                    d={s.d}
-                    fill={KIND_FILL[kind]}
-                    fillOpacity={0.92}
-                    style={{ strokeWidth: 0.7, stroke: 'rgba(58,46,32,.8)' }}
+                    d={`M${geo.sphereBounds[0][0]},${geo.sphereBounds[0][1]}H${geo.sphereBounds[1][0]}M${geo.sphereBounds[0][0]},${geo.sphereBounds[1][1]}H${geo.sphereBounds[1][0]}`}
+                    fill="none"
+                    stroke={tokens.ink}
+                    strokeWidth={1.4}
+                    vectorEffect="non-scaling-stroke"
+                    pointerEvents="none"
                   />
-                ) : null
-              })}
-            </g>
-            {lineD && (
-              <path
-                d={lineD}
-                fill="none"
-                stroke={tokens.brickDark}
-                strokeWidth={1.1}
-                strokeDasharray="4 3"
-                vectorEffect="non-scaling-stroke"
-                pointerEvents="none"
-              />
-            )}
-            <g ref={ringsRef}>
-              {rings.map((r) => {
-                const kind = highlights[r.id]
-                if (!kind && !tapRings) return null
-                return (
-                  <g key={r.id} transform={`translate(${r.x},${r.y})`}>
-                    <g className="counter">
-                      <circle
-                        data-id={r.id}
-                        r={kind ? 10 : 9}
-                        fill={kind ? KIND_FILL[kind] : 'rgba(255,250,235,.01)'}
-                        fillOpacity={kind ? 0.55 : 1}
-                        stroke={kind ? tokens.ink : tokens.inkSoft}
-                        strokeOpacity={kind ? 1 : 0.7}
-                        strokeWidth={kind ? 1 : 0.8}
-                        strokeDasharray={kind ? undefined : '2 2'}
+                )}
+                <path
+                  d={geo.graticuleD}
+                  fill="none"
+                  stroke="rgba(46,36,24,.22)"
+                  strokeWidth={0.5}
+                  strokeDasharray="2 3"
+                  vectorEffect="non-scaling-stroke"
+                  pointerEvents="none"
+                />
+                <g className="land">
+                  {geo.shapes.map((s) => (
+                    <ShapePath
+                      key={s.id}
+                      id={s.id}
+                      d={s.d}
+                      color={tokens.land[s.colorIndex]}
+                      dim={!!inScope && !inScope.has(s.id)}
+                    />
+                  ))}
+                </g>
+                {sheen && dx === 0 && (
+                  <>
+                    <defs>
+                      <linearGradient id="atlas-sheen" x1="0" y1="0" x2="0.6" y2="1">
+                        <stop offset="0" stopColor="#fff" stopOpacity="0.5" />
+                        <stop offset="0.45" stopColor="#fff" stopOpacity="0" />
+                        <stop offset="1" stopColor="#3a2e20" stopOpacity="0.14" />
+                      </linearGradient>
+                    </defs>
+                    <path d={geo.sphereD} fill="url(#atlas-sheen)" pointerEvents="none" />
+                  </>
+                )}
+                <g className="land" pointerEvents="none">
+                  {highlighted.map(([id, kind]) => {
+                    const s = geo.shapes.find((x) => x.id === id)
+                    return s ? (
+                      <path
+                        key={id}
+                        d={s.d}
+                        fill={KIND_FILL[kind]}
+                        fillOpacity={0.92}
+                        style={{ strokeWidth: 0.7, stroke: 'rgba(58,46,32,.8)' }}
                       />
-                    </g>
-                  </g>
-                )
-              })}
-            </g>
-            <g pointerEvents="none">
-              {markers.map((m, i) => {
-                const p = project(m.lon, m.lat)
-                if (!p) return null
-                return (
-                  <g key={i} transform={`translate(${p[0]},${p[1]})`}>
-                    <g className="counter">
-                      {m.kind === 'star' ? (
-                        <path
-                          d={STAR}
-                          fill={tokens.ink}
-                          stroke={tokens.paperLight}
-                          strokeWidth={2}
-                          paintOrder="stroke"
-                          transform="scale(1.05)"
-                        />
-                      ) : (
-                        <>
-                          <circle r={5.5} fill={tokens.brick} stroke={tokens.paperLight} strokeWidth={2} />
-                          <circle r={1.6} fill={tokens.paperLight} />
-                        </>
-                      )}
-                    </g>
-                  </g>
-                )
-              })}
-              {labels.map((l, i) => {
-                const p = project(l.lon, l.lat)
-                if (!p) return null
-                return (
-                  <g key={i} transform={`translate(${p[0]},${p[1]})`}>
-                    <g className="counter">
-                      <text
-                        y={l.dy ?? 0}
-                        textAnchor="middle"
-                        fontFamily={fontBody}
-                        fontWeight={600}
-                        fontSize={11.5}
-                        letterSpacing="0.06em"
-                        fill={tokens.ink}
-                        stroke={tokens.paperLight}
-                        strokeOpacity={0.9}
-                        strokeWidth={3.2}
-                        strokeLinejoin="round"
-                        paintOrder="stroke"
-                      >
-                        {l.text.toUpperCase()}
-                      </text>
-                    </g>
-                  </g>
-                )
-              })}
-            </g>
+                    ) : null
+                  })}
+                </g>
+                {lineD && (
+                  <path
+                    d={lineD}
+                    fill="none"
+                    stroke={tokens.brickDark}
+                    strokeWidth={1.1}
+                    strokeDasharray="4 3"
+                    vectorEffect="non-scaling-stroke"
+                    pointerEvents="none"
+                  />
+                )}
+                <g className="rings">
+                  {rings.map((r) => {
+                    const kind = highlights[r.id]
+                    if (!kind && !tapRings) return null
+                    return (
+                      <g key={r.id} transform={`translate(${r.x},${r.y})`}>
+                        <g className="counter">
+                          <circle
+                            data-id={r.id}
+                            r={kind ? 10 : 9}
+                            fill={kind ? KIND_FILL[kind] : 'rgba(255,250,235,.01)'}
+                            fillOpacity={kind ? 0.55 : 1}
+                            stroke={kind ? tokens.ink : tokens.inkSoft}
+                            strokeOpacity={kind ? 1 : 0.7}
+                            strokeWidth={kind ? 1 : 0.8}
+                            strokeDasharray={kind ? undefined : '2 2'}
+                          />
+                        </g>
+                      </g>
+                    )
+                  })}
+                </g>
+                <g pointerEvents="none">
+                  {markers.map((m, i) => {
+                    const p = project(m.lon, m.lat)
+                    if (!p) return null
+                    return (
+                      <g key={i} transform={`translate(${p[0]},${p[1]})`}>
+                        <g className="counter">
+                          {m.kind === 'star' ? (
+                            <path
+                              d={STAR}
+                              fill={tokens.ink}
+                              stroke={tokens.paperLight}
+                              strokeWidth={2}
+                              paintOrder="stroke"
+                              transform="scale(1.05)"
+                            />
+                          ) : (
+                            <>
+                              <circle r={5.5} fill={tokens.brick} stroke={tokens.paperLight} strokeWidth={2} />
+                              <circle r={1.6} fill={tokens.paperLight} />
+                            </>
+                          )}
+                        </g>
+                      </g>
+                    )
+                  })}
+                  {labels.map((l, i) => {
+                    const p = project(l.lon, l.lat)
+                    if (!p) return null
+                    return (
+                      <g key={i} transform={`translate(${p[0]},${p[1]})`}>
+                        <g className="counter">
+                          <text
+                            y={l.dy ?? 0}
+                            textAnchor="middle"
+                            fontFamily={fontBody}
+                            fontWeight={600}
+                            fontSize={11.5}
+                            letterSpacing="0.06em"
+                            fill={tokens.ink}
+                            stroke={tokens.paperLight}
+                            strokeOpacity={0.9}
+                            strokeWidth={3.2}
+                            strokeLinejoin="round"
+                            paintOrder="stroke"
+                          >
+                            {l.text.toUpperCase()}
+                          </text>
+                        </g>
+                      </g>
+                    )
+                  })}
+                </g>
+              </g>
+            ))}
           </g>
         )}
       </svg>
