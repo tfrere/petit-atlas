@@ -61,3 +61,12 @@ HF_TOKEN=hf_xxx npm run deploy:hf -- <utilisateur-ou-org>/<nom-du-space>
 ```
 
 Le script construit le projet, ajoute l'en-tête de Space (`hf/README.md`) et envoie le tout avec la CLI `hf`. Le token doit avoir un droit d'écriture.
+
+## Données vent & courants (étude)
+
+`scripts/build-flow-data.py` télécharge et convertit deux climatologies libres de droits en grilles compactes (`public/data/flow/wind.json`, `currents.json` : Int8 en base64, 12 mois, valeur = entier × `scale` en m/s, -128 = terre) :
+
+- vent de surface : NCEP/NCAR Reanalysis (NOAA PSL), moyennes mensuelles de long terme, 2,5° ;
+- courants de surface : SODA 3.3.1 (niveau ~5 m, moyennes mensuelles 2006-2015), ramenés à 1°, via NOAA CoastWatch ERDDAP.
+
+Ces fichiers ne sont pas encore utilisés par l'application.
