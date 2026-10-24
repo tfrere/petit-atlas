@@ -5,10 +5,10 @@ const FACES = [
   'italic 600 1em "Cormorant Garamond"',
   '700 1em "Cormorant Garamond"',
   'italic 700 1em "Cormorant Garamond"',
-  '400 1em "Crimson Pro"',
-  'italic 400 1em "Crimson Pro"',
-  '500 1em "Crimson Pro"',
-  '600 1em "Crimson Pro"',
+  '400 1em "IBM Plex Mono"',
+  'italic 400 1em "IBM Plex Mono"',
+  '500 1em "IBM Plex Mono"',
+  '600 1em "IBM Plex Mono"',
 ]
 
 const SAMPLE = 'Le Petit Atlas — éèêàçôûîœ ÉÈ 0123456789'

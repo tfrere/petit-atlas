@@ -15,7 +15,7 @@ import { regionById } from '../data/regions'
 import type { RegionId } from '../data/types'
 import { COUNTRIES } from '../data/world'
 import type { WorldData } from '../data/world'
-import { fontDisplay, tokens } from '../theme'
+import { fontBody, tokens } from '../theme'
 
 export type HighlightKind = 'target' | 'correct' | 'wrong'
 
@@ -182,7 +182,7 @@ function CompassRose() {
         strokeWidth="0.8"
       />
       <path d="M0,0 L22,-22 M0,0 L-22,-22 M0,0 L22,22 M0,0 L-22,22" stroke="currentColor" strokeWidth="0.6" />
-      <text y="-47.5" textAnchor="middle" fontSize="12" fontFamily={fontDisplay} fontWeight="700" fill="currentColor">
+      <text y="-47.5" textAnchor="middle" fontSize="12" fontFamily={fontBody} fontWeight="600" fill="currentColor">
         N
       </text>
     </Box>
@@ -404,20 +404,6 @@ export default function WorldMap({
     if (pointers.current.size === 0) press.current = null
   }
 
-  const zoomBy = (factor: number) => {
-    if (!svgRef.current || !zoomRef.current) return
-    select(svgRef.current).transition().duration(250).call(zoomRef.current.scaleBy, factor)
-  }
-
-  const overview = () => {
-    if (!svgRef.current || !zoomRef.current) return
-    select(svgRef.current)
-      .transition()
-      .duration(500)
-      .ease(easeCubicInOut)
-      .call(zoomRef.current.transform, computeTransform(undefined))
-  }
-
   const highlighted = Object.entries(highlights)
   const project = (lon: number, lat: number) => geo?.projection([lon, lat]) ?? null
   const lineD = geo && line ? geo.path({ type: 'LineString', coordinates: line }) : null
@@ -563,10 +549,10 @@ export default function WorldMap({
                       <text
                         y={l.dy ?? 0}
                         textAnchor="middle"
-                        fontFamily={fontDisplay}
-                        fontWeight={700}
-                        fontSize={13.5}
-                        letterSpacing="0.14em"
+                        fontFamily={fontBody}
+                        fontWeight={600}
+                        fontSize={11.5}
+                        letterSpacing="0.06em"
                         fill={tokens.ink}
                         stroke={tokens.paperLight}
                         strokeOpacity={0.9}
@@ -614,51 +600,6 @@ export default function WorldMap({
       )}
 
       {interactive && <CompassRose />}
-
-      {interactive && (
-        <Box
-          sx={{
-            position: 'absolute',
-            right: 8,
-            bottom: 8,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px',
-          }}
-        >
-          {(
-            [
-              ['+', 'Zoomer', () => zoomBy(1.8)],
-              ['−', 'Dézoomer', () => zoomBy(1 / 1.8)],
-              ['⌂', 'Vue d’ensemble', overview],
-            ] as const
-          ).map(([glyph, label, action]) => (
-            <Box
-              key={label}
-              component="button"
-              type="button"
-              aria-label={label}
-              onClick={action}
-              sx={{
-                width: 44,
-                height: 44,
-                fontFamily: fontDisplay,
-                fontSize: 22,
-                fontWeight: 500,
-                lineHeight: 1,
-                color: tokens.ink,
-                background: 'rgba(249,243,227,.92)',
-                border: `1px solid ${tokens.hair}`,
-                borderRadius: '2px',
-                cursor: 'pointer',
-                '&:active': { background: tokens.paper },
-              }}
-            >
-              {glyph}
-            </Box>
-          ))}
-        </Box>
-      )}
     </Box>
   )
 }

@@ -226,7 +226,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
               <Typography variant="overline" sx={{ color: tokens.inkSoft }}>
                 Record
               </Typography>
-              <Typography sx={{ fontFamily: fontDisplay, fontWeight: 600, fontSize: '1.3rem', lineHeight: 1 }}>
+              <Typography sx={{ fontWeight: 600, fontSize: '1.1rem', lineHeight: 1 }}>
                 {record ? (
                   <>
                     {formatTime(record.ms)}

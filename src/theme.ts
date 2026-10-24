@@ -19,7 +19,7 @@ export const tokens = {
 }
 
 export const fontDisplay = '"Cormorant Garamond", "Iowan Old Style", Georgia, serif'
-export const fontBody = '"Crimson Pro", "Iowan Old Style", Georgia, serif'
+export const fontBody = '"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'
 
 /** Deux filets fins, l'un contre l'autre, à poser en bas (ou en haut) d'un bandeau. */
 export const doubleRule = (side: 'bottom' | 'top') => ({
@@ -45,19 +45,19 @@ export const theme = createTheme({
   shape: { borderRadius: 2 },
   typography: {
     fontFamily: fontBody,
-    fontSize: 16,
+    fontSize: 15,
     h1: { fontFamily: fontDisplay, fontWeight: 500 },
     h2: { fontFamily: fontDisplay, fontWeight: 500 },
     h3: { fontFamily: fontDisplay, fontWeight: 500 },
     h4: { fontFamily: fontDisplay, fontWeight: 500 },
     h5: { fontFamily: fontDisplay, fontWeight: 500 },
     h6: { fontFamily: fontDisplay, fontWeight: 500 },
-    button: { fontFamily: fontBody, fontWeight: 500, textTransform: 'none', letterSpacing: '0.03em' },
+    button: { fontFamily: fontBody, fontWeight: 500, textTransform: 'none', letterSpacing: '0.02em' },
     overline: {
       fontFamily: fontBody,
       fontWeight: 500,
       fontSize: '0.72rem',
-      letterSpacing: '0.24em',
+      letterSpacing: '0.16em',
       textTransform: 'uppercase',
       lineHeight: 1.5,
     },

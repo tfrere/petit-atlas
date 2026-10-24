@@ -17,7 +17,7 @@ import { TARGETS, buildQuestions } from '../game/targets'
 import type { Question } from '../game/targets'
 import WorldMap from '../map/WorldMap'
 import type { HighlightKind, MapLabel, MapMarker, MapView, TapInfo } from '../map/WorldMap'
-import { doubleRule, fontBody, fontDisplay, tokens } from '../theme'
+import { doubleRule, fontDisplay, tokens } from '../theme'
 
 export interface Answer {
   question: Question
@@ -43,6 +43,20 @@ interface Reveal {
   tappedId?: string | null
   tapped?: { lon: number; lat: number }
   km?: number
+}
+
+const HALO = [
+  [-1.5, 0],
+  [1.5, 0],
+  [0, -1.5],
+  [0, 1.5],
+  [-1.1, -1.1],
+  [1.1, -1.1],
+  [-1.1, 1.1],
+  [1.1, 1.1],
+]
+const halo = {
+  textShadow: `${HALO.map(([x, y]) => `${x}px ${y}px 0 rgba(255,255,255,.95)`).join(', ')}, 0 0 6px rgba(255,255,255,.9)`,
 }
 
 const CAPITAL_TOLERANCE_KM = 250
@@ -99,9 +113,7 @@ function Chrono({ read }: { read: () => number }) {
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <Box sx={{ textAlign: 'center', minWidth: 56 }}>
-      <Typography sx={{ fontFamily: fontDisplay, fontWeight: 600, fontSize: '1.4rem', lineHeight: 1, color }}>
-        {value}
-      </Typography>
+      <Typography sx={{ fontWeight: 600, fontSize: '1.2rem', lineHeight: 1, color }}>{value}</Typography>
       <Typography
         variant="overline"
         sx={{
@@ -364,38 +376,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
         <Chrono read={watch.read} />
       </Box>
 
-      <Box
-        sx={{
-          px: 2,
-          pt: 1,
-          pb: 1.75,
-          textAlign: 'center',
-          background: tokens.paper,
-          ...doubleRule('bottom'),
-          minHeight: locate ? 88 : 62,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-        }}
-      >
-        <Typography variant="overline" sx={{ color: tokens.brick }}>
-          {prompt}
-        </Typography>
-        {locate && (
-          <Typography
-            sx={{
-              fontFamily: fontDisplay,
-              fontWeight: 600,
-              fontSize: 'clamp(1.9rem, 8vw, 2.6rem)',
-              lineHeight: 1.05,
-              letterSpacing: '0.01em',
-              color: phase === 'correct' ? tokens.sage : phase === 'wrong' ? tokens.wrong : tokens.ink,
-            }}
-          >
-            {q.label}
-          </Typography>
-        )}
-      </Box>
+      <Box sx={{ height: '1px', background: tokens.hair }} />
 
       <Box sx={{ position: 'relative', flex: 1, minHeight: 0 }}>
         <WorldMap
@@ -410,6 +391,36 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
           tapRings={locate}
           interactive
         />
+
+        {!(locate && phase === 'wrong') && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 10,
+              left: 12,
+              right: 12,
+              textAlign: 'center',
+              pointerEvents: 'none',
+              ...halo,
+            }}
+          >
+            <Typography variant="overline" sx={{ color: tokens.brickDark, display: 'block', fontSize: '0.64rem' }}>
+              {prompt}
+            </Typography>
+            {locate && (
+              <Typography
+                sx={{
+                  fontWeight: 600,
+                  fontSize: 'clamp(1.15rem, 5.4vw, 1.6rem)',
+                  lineHeight: 1.15,
+                  color: phase === 'correct' ? tokens.sage : tokens.ink,
+                }}
+              >
+                {q.label}
+              </Typography>
+            )}
+          </Box>
+        )}
 
         {locate && phase === 'wrong' && (
           <Box
@@ -429,7 +440,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
             }}
           >
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontFamily: fontDisplay, fontWeight: 600, fontSize: '1.4rem', lineHeight: 1.1 }}>
+              <Typography sx={{ fontWeight: 600, fontSize: '1.15rem', lineHeight: 1.15 }}>
                 C’était : {q.label}
               </Typography>
               {wrongDetail && (
@@ -462,9 +473,8 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
             {phase !== 'asking' && (
               <Typography
                 sx={{
-                  fontFamily: fontDisplay,
                   fontWeight: 600,
-                  fontSize: '1.3rem',
+                  fontSize: '1.05rem',
                   lineHeight: 1.15,
                   mb: 0.75,
                   color: phase === 'correct' ? tokens.sage : tokens.wrong,
@@ -479,7 +489,6 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
                       fontSize: '0.9rem',
                       fontWeight: 400,
                       color: tokens.inkSoft,
-                      fontFamily: fontBody,
                     }}
                   >
                     {wrongDetail}
@@ -507,9 +516,8 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
                   minWidth: 0,
                   height: 50,
                   px: 1.5,
-                  fontFamily: fontDisplay,
                   fontWeight: 600,
-                  fontSize: '1.4rem',
+                  fontSize: '1.15rem',
                   color: phase === 'correct' ? tokens.sage : phase === 'wrong' ? tokens.wrong : tokens.ink,
                   background: tokens.paperLight,
                   border: `1px solid ${tokens.hair}`,
