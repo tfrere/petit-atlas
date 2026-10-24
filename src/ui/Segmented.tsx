@@ -40,6 +40,8 @@ export default function Segmented<T extends string | number>({ value, options, o
               position: 'relative',
               flex: 1,
               minHeight: 48,
+              whiteSpace: 'nowrap',
+              '@media (max-height: 700px) and (max-width: 899.95px)': { minHeight: 40, py: 0.25 },
               px: 1,
               py: 0.75,
               fontFamily: fontBody,
@@ -66,6 +68,7 @@ export default function Segmented<T extends string | number>({ value, options, o
                   fontStyle: 'italic',
                   fontWeight: 400,
                   color: tokens.inkSoft,
+                  '@media (max-height: 700px) and (max-width: 899.95px)': { display: 'none' },
                 }}
               >
                 {o.hint}

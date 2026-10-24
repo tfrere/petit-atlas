@@ -14,6 +14,7 @@ import { markFound } from '../game/progress'
 import type { GameConfig } from '../game/records'
 import { TARGETS, buildQuestions } from '../game/targets'
 import type { Question } from '../game/targets'
+import Hud from '../ui/Hud'
 import WorldMap from '../map/WorldMap'
 import type { HighlightKind, MapLabel, MapMarker, MapView, TapInfo } from '../map/WorldMap'
 import { doubleRule, fontDisplay, tokens } from '../theme'
@@ -110,92 +111,6 @@ function useStopwatch() {
   }, [])
 
   return { resume, pause, read, reset }
-}
-
-const LOW_TIME_MS = 5000
-
-/** Compte à rebours de la question : s'arrête dès qu'une réponse est donnée et déclenche `onExpire` à zéro. */
-function Countdown({
-  read,
-  limitMs,
-  active,
-  onExpire,
-}: {
-  read: () => number
-  limitMs: number
-  active: boolean
-  onExpire: () => void
-}) {
-  const [elapsed, setElapsed] = useState(0)
-  const fired = useRef(false)
-  const expireRef = useRef(onExpire)
-
-  useEffect(() => {
-    expireRef.current = onExpire
-  })
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      const ms = read()
-      setElapsed(ms)
-      if (active && ms >= limitMs && !fired.current) {
-        fired.current = true
-        expireRef.current()
-      }
-    }, 100)
-    return () => window.clearInterval(id)
-  }, [read, limitMs, active])
-
-  const remaining = Math.max(0, limitMs - elapsed)
-  const low = remaining <= LOW_TIME_MS
-  return (
-    <>
-      <Stat label="Temps" value={`${Math.ceil(remaining / 1000)} s`} color={low ? tokens.brick : undefined} />
-      <Box
-        aria-hidden
-        sx={{
-          position: 'absolute',
-          left: 0,
-          bottom: 0,
-          height: '3px',
-          width: `${(remaining / limitMs) * 100}%`,
-          background: low ? tokens.brick : tokens.inkSoft,
-          opacity: active ? 0.85 : 0.35,
-          transition: 'width .1s linear, background .3s',
-        }}
-      />
-    </>
-  )
-}
-
-function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <Box sx={{ textAlign: 'center', minWidth: 56 }}>
-      <Typography
-        sx={{
-          fontWeight: 600,
-          fontSize: '1.2rem',
-          lineHeight: 1.26,
-          fontVariantNumeric: 'tabular-nums',
-          color,
-        }}
-      >
-        {value}
-      </Typography>
-      <Typography
-        variant="overline"
-        sx={{
-          fontSize: '0.56rem',
-          letterSpacing: '0.2em',
-          color: tokens.inkSoft,
-          lineHeight: 1.3,
-          display: 'block',
-          mt: 0.25,
-        }}
-      >
-        {label}
-      </Typography>
-    </Box>
-  )
 }
 
 export default function Play({ world, config, onExit, onFinish }: Props) {
@@ -458,41 +373,21 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
         pt: 'env(safe-area-inset-top)',
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 1,
-          position: 'relative',
-          px: 1,
-          py: 0.75,
-          background: tokens.paper,
-          borderBottom: `1px solid ${tokens.hair}`,
+      <Hud
+        index={index}
+        total={questions.length}
+        score={score}
+        onQuit={() => {
+          pause()
+          setConfirmQuit(true)
         }}
-      >
-        <Button
-          onClick={() => {
-            pause()
-            setConfirmQuit(true)
-          }}
-          aria-label="Abandonner"
-          sx={{ minWidth: 44, minHeight: 44, color: tokens.inkSoft, fontSize: '1.2rem', fontWeight: 400, px: 0 }}
-        >
-          ✕
-        </Button>
-        <Stat label="Question" value={`${index + 1}/${questions.length}`} />
-        <Stat label="Score" value={String(score)} color={score ? tokens.sage : undefined} />
-        <Countdown
-          key={index}
-          read={readQuestion}
-          limitMs={TIME_LIMIT_MS[config.mode]}
-          active={phase === 'asking'}
-          onExpire={timeUp}
-        />
-      </Box>
-
-      <Box sx={{ height: '1px', background: tokens.hair }} />
+        timer={{
+          read: readQuestion,
+          limitMs: TIME_LIMIT_MS[config.mode],
+          active: phase === 'asking',
+          onExpire: timeUp,
+        }}
+      />
 
       <Box sx={{ position: 'relative', flex: 1, minHeight: 0 }}>
         <WorldMap

@@ -35,10 +35,12 @@ interface Props {
   onPlay: () => void
 }
 
+const SHORT = '@media (max-height: 700px) and (max-width: 899.95px)'
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Box sx={{ mb: { xs: 2, md: 2.75 } }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1 }}>
+    <Box sx={{ mb: { xs: 2, md: 2.75 }, [SHORT]: { mb: 1.25 } }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1, [SHORT]: { mb: 0.5 } }}>
         <Typography variant="overline" sx={{ color: tokens.inkSoft, whiteSpace: 'nowrap' }}>
           {title}
         </Typography>
@@ -73,6 +75,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
     })
 
   const compact = useMediaQuery('(max-width:599.95px)')
+  const short = useMediaQuery('(max-height:700px)')
 
   const set = (patch: Partial<GameConfig>) => onChange({ ...config, ...patch })
 
@@ -95,10 +98,11 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             px: 2.5,
             pt: 'max(18px, env(safe-area-inset-top))',
             pb: 2,
+            [SHORT]: { gap: 1.75, pt: 'max(12px, env(safe-area-inset-top))', pb: 1 },
           }}
         >
           <Box sx={{ ...rise(0, 1000), display: 'flex' }}>
-            <MiniGlobe world={world} region={config.region} size={116} />
+            <MiniGlobe world={world} region={config.region} size={short ? 84 : 116} />
           </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="overline" sx={{ color: tokens.brick, display: 'block', ...rise(60) }}>
@@ -108,7 +112,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
               variant="h1"
               sx={{
                 mt: 0.25,
-                fontSize: '2.55rem',
+                fontSize: 'min(2.55rem, 9.4vw)',
                 lineHeight: 0.98,
                 letterSpacing: '-0.02em',
                 fontStyle: 'italic',
@@ -118,7 +122,16 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             >
               Le Petit Atlas
             </Typography>
-            <Typography sx={{ mt: 0.75, fontSize: '0.74rem', lineHeight: 1.35, color: tokens.inkSoft, ...rise(200) }}>
+            <Typography
+              sx={{
+                mt: 0.75,
+                fontSize: '0.74rem',
+                lineHeight: 1.35,
+                color: tokens.inkSoft,
+                ...rise(200),
+                [SHORT]: { display: 'none' },
+              }}
+            >
               Géographie sur une carte d’atlas.
             </Typography>
           </Box>
@@ -198,7 +211,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: { md: 'center' },
+            justifyContent: { xs: 'space-evenly', md: 'center' },
           }}
         >
           <Section title="Je cherche">
@@ -237,6 +250,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
                     onClick={() => set({ region: r.id as RegionId })}
                     sx={{
                       minHeight: 44,
+                      [SHORT]: { minHeight: 38 },
                       px: 1,
                       fontFamily: fontBody,
                       fontSize: '1rem',
@@ -259,7 +273,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             <Segmented
               label="Longueur de la série"
               value={config.count}
-              options={COUNTS.map((n) => ({ value: n, label: n === 0 ? `Tous · ${total}` : String(n) }))}
+              options={COUNTS.map((n) => ({ value: n, label: n === 0 ? `Tous ${total}` : String(n) }))}
               onChange={(v: number) => set({ count: v })}
             />
           </Section>
@@ -270,13 +284,21 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             position: 'sticky',
             bottom: 0,
             pt: 2.5,
+            [SHORT]: { pt: 1.25 },
             pb: 'max(14px, env(safe-area-inset-bottom))',
             px: { xs: 2.5, md: 4 },
             background: `linear-gradient(to top, ${tokens.paper} 62%, rgba(243,234,212,0))`,
           }}
         >
           <Box sx={{ width: '100%', maxWidth: 520, mx: 'auto' }}>
-            <Button fullWidth variant="contained" color="primary" size="large" onClick={onPlay} sx={{ minHeight: 54 }}>
+            <Button
+              fullWidth
+              variant="contained"
+              color="primary"
+              size="large"
+              onClick={onPlay}
+              sx={{ minHeight: 54, [SHORT]: { minHeight: 48 } }}
+            >
               Jouer · {effectiveCount} questions
             </Button>
           </Box>
