@@ -1,5 +1,5 @@
 import type { Feature, MultiPolygon, Polygon } from 'geojson'
-import { geoArea, geoCentroid } from 'd3-geo'
+import { geoArea, geoCentroid, geoDistance } from 'd3-geo'
 import { feature, merge, neighbors } from 'topojson-client'
 import type {
   GeometryCollection,
@@ -34,11 +34,18 @@ function polygonsOf(f: Feature<Polygon | MultiPolygon>): Polygon['coordinates'][
   return f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates
 }
 
+/** Rayon (en radians) autour de la plus grande partie d'un pays pour cadrer la caméra (~34°). */
+const FOCUS_RADIUS = 0.6
+
 function focusOf(f: Feature<Polygon | MultiPolygon>): Feature<Polygon | MultiPolygon> {
-  const polys = polygonsOf(f)
-  const areas = polys.map((coordinates) => geoArea({ type: 'Polygon', coordinates }))
-  const max = Math.max(...areas)
-  const kept = polys.filter((_, i) => areas[i] >= max * 0.08)
+  const polys = polygonsOf(f).map((coordinates) => {
+    const poly: Polygon = { type: 'Polygon', coordinates }
+    return { coordinates, area: geoArea(poly), center: geoCentroid(poly) }
+  })
+  const main = polys.reduce((a, b) => (b.area > a.area ? b : a))
+  const kept = polys
+    .filter((p) => p.area >= main.area * 0.08 && geoDistance(p.center, main.center) < FOCUS_RADIUS)
+    .map((p) => p.coordinates)
   return {
     type: 'Feature',
     properties: {},

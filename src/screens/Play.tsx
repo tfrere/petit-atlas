@@ -16,7 +16,7 @@ import { TARGETS, buildQuestions } from '../game/targets'
 import type { Question } from '../game/targets'
 import WorldMap from '../map/WorldMap'
 import type { HighlightKind, MapLabel, MapMarker, MapView, TapInfo } from '../map/WorldMap'
-import { fontDisplay, tokens } from '../theme'
+import { doubleRule, fontBody, fontDisplay, tokens } from '../theme'
 
 export interface Answer {
   question: Question
@@ -97,13 +97,20 @@ function Chrono({ read }: { read: () => number }) {
 
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <Box sx={{ textAlign: 'center', minWidth: 52 }}>
-      <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: '1.35rem', lineHeight: 1, color }}>
+    <Box sx={{ textAlign: 'center', minWidth: 56 }}>
+      <Typography sx={{ fontFamily: fontDisplay, fontWeight: 600, fontSize: '1.4rem', lineHeight: 1, color }}>
         {value}
       </Typography>
       <Typography
         variant="overline"
-        sx={{ fontSize: '0.62rem', color: tokens.inkSoft, lineHeight: 1.2, display: 'block' }}
+        sx={{
+          fontSize: '0.56rem',
+          letterSpacing: '0.2em',
+          color: tokens.inkSoft,
+          lineHeight: 1.3,
+          display: 'block',
+          mt: 0.25,
+        }}
       >
         {label}
       </Typography>
@@ -337,7 +344,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
           px: 1,
           py: 0.75,
           background: tokens.paper,
-          borderBottom: `1.5px solid ${tokens.ink}`,
+          borderBottom: `1px solid ${tokens.hair}`,
         }}
       >
         <Button
@@ -346,7 +353,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
             setConfirmQuit(true)
           }}
           aria-label="Abandonner"
-          sx={{ minWidth: 44, minHeight: 44, color: tokens.ink, fontSize: '1.4rem', px: 0 }}
+          sx={{ minWidth: 44, minHeight: 44, color: tokens.inkSoft, fontSize: '1.2rem', fontWeight: 400, px: 0 }}
         >
           ✕
         </Button>
@@ -358,26 +365,28 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
       <Box
         sx={{
           px: 2,
-          py: 1,
+          pt: 1,
+          pb: 1.75,
           textAlign: 'center',
           background: tokens.paper,
-          borderBottom: `4px double ${tokens.ink}`,
-          minHeight: locate ? 78 : 56,
+          ...doubleRule('bottom'),
+          minHeight: locate ? 88 : 62,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
         }}
       >
-        <Typography variant="overline" sx={{ color: tokens.brick, lineHeight: 1.2 }}>
+        <Typography variant="overline" sx={{ color: tokens.brick }}>
           {prompt}
         </Typography>
         {locate && (
           <Typography
             sx={{
               fontFamily: fontDisplay,
-              fontWeight: 700,
-              fontSize: 'clamp(1.7rem, 7vw, 2.4rem)',
+              fontWeight: 600,
+              fontSize: 'clamp(1.9rem, 8vw, 2.6rem)',
               lineHeight: 1.05,
+              letterSpacing: '0.01em',
               color: phase === 'correct' ? tokens.sage : phase === 'wrong' ? tokens.wrong : tokens.ink,
             }}
           >
@@ -407,18 +416,18 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
               left: 8,
               right: 8,
               top: 8,
-              p: 1.5,
-              background: 'rgba(247,239,219,.97)',
-              border: `1.5px solid ${tokens.ink}`,
-              boxShadow: `3px 3px 0 ${tokens.ink}`,
-              borderRadius: '3px',
+              p: 1.75,
+              background: 'rgba(249,243,227,.97)',
+              border: `1px solid ${tokens.hair}`,
+              boxShadow: `inset 0 0 0 3px rgba(249,243,227,.97), inset 0 0 0 4px ${tokens.hairSoft}, 0 10px 24px -12px rgba(58,46,32,.5)`,
+              borderRadius: '2px',
               display: 'flex',
               alignItems: 'center',
               gap: 1.5,
             }}
           >
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: '1.3rem', lineHeight: 1.1 }}>
+              <Typography sx={{ fontFamily: fontDisplay, fontWeight: 600, fontSize: '1.4rem', lineHeight: 1.1 }}>
                 C’était : {q.label}
               </Typography>
               {wrongDetail && (
@@ -441,9 +450,9 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
           }}
           sx={{
             background: tokens.paper,
-            borderTop: `4px double ${tokens.ink}`,
+            ...doubleRule('top'),
             px: 1.5,
-            pt: 1.25,
+            pt: 2,
             pb: 'max(10px, env(safe-area-inset-bottom))',
           }}
         >
@@ -452,8 +461,8 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
               <Typography
                 sx={{
                   fontFamily: fontDisplay,
-                  fontWeight: 700,
-                  fontSize: '1.25rem',
+                  fontWeight: 600,
+                  fontSize: '1.3rem',
                   lineHeight: 1.15,
                   mb: 0.75,
                   color: phase === 'correct' ? tokens.sage : tokens.wrong,
@@ -468,7 +477,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
                       fontSize: '0.9rem',
                       fontWeight: 400,
                       color: tokens.inkSoft,
-                      fontFamily: 'inherit',
+                      fontFamily: fontBody,
                     }}
                   >
                     {wrongDetail}
@@ -494,25 +503,25 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
                 sx={{
                   flex: 1,
                   minWidth: 0,
-                  height: 52,
+                  height: 50,
                   px: 1.5,
                   fontFamily: fontDisplay,
-                  fontWeight: 700,
-                  fontSize: '1.45rem',
+                  fontWeight: 600,
+                  fontSize: '1.4rem',
                   color: phase === 'correct' ? tokens.sage : phase === 'wrong' ? tokens.wrong : tokens.ink,
-                  background: '#fbf5e6',
-                  border: `1.5px solid ${tokens.ink}`,
-                  borderRadius: '3px',
+                  background: tokens.paperLight,
+                  border: `1px solid ${tokens.hair}`,
+                  borderRadius: '2px',
                   outline: 'none',
-                  '&:focus': { boxShadow: `0 0 0 3px rgba(180,71,42,.35)` },
-                  '&::placeholder': { color: 'rgba(93,76,55,.55)', fontWeight: 600, fontStyle: 'italic' },
+                  '&:focus': { borderColor: tokens.brick, boxShadow: '0 0 0 3px rgba(168,69,43,.15)' },
+                  '&::placeholder': { color: 'rgba(110,92,69,.6)', fontWeight: 500, fontStyle: 'italic' },
                 }}
               />
               <Button
                 type="submit"
                 variant="contained"
                 onMouseDown={(e) => e.preventDefault()}
-                sx={{ minWidth: 104, height: 52 }}
+                sx={{ minWidth: 104, height: 50 }}
               >
                 {phase === 'asking' ? 'Valider' : 'Suite'}
               </Button>
@@ -521,7 +530,16 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
               <Button
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={skip}
-                sx={{ mt: 0.5, minHeight: 36, color: tokens.inkSoft, textDecoration: 'underline', fontSize: '0.95rem' }}
+                sx={{
+                  mt: 0.5,
+                  minHeight: 36,
+                  color: tokens.inkSoft,
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 3,
+                  fontSize: '0.95rem',
+                  fontWeight: 400,
+                  letterSpacing: 0,
+                }}
               >
                 Je passe
               </Button>
@@ -531,7 +549,9 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
       )}
 
       <Dialog open={confirmQuit} onClose={closeQuit}>
-        <DialogTitle sx={{ fontFamily: fontDisplay, fontWeight: 700 }}>Abandonner la série ?</DialogTitle>
+        <DialogTitle sx={{ fontFamily: fontDisplay, fontWeight: 600, fontSize: '1.5rem' }}>
+          Abandonner la série ?
+        </DialogTitle>
         <DialogContent>
           <DialogContentText>Le chrono et la progression seront perdus.</DialogContentText>
         </DialogContent>

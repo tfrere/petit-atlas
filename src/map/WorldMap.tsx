@@ -65,7 +65,7 @@ const MAX_ZOOM = 120
 const RING_AREA_KM2 = 3000
 
 const KIND_FILL: Record<HighlightKind, string> = {
-  target: '#d9743c',
+  target: tokens.target,
   correct: tokens.sage,
   wrong: tokens.wrong,
 }
@@ -160,7 +160,7 @@ function CompassRose() {
         bottom: 8,
         width: 64,
         height: 64,
-        opacity: 0.6,
+        opacity: 0.5,
         pointerEvents: 'none',
         color: tokens.ink,
       }}
@@ -214,6 +214,7 @@ export default function WorldMap({
       { type: 'Sphere' },
     )
     const path = geoPath(projection).digits(2)
+    const shapes = world.shapes.map((s) => ({ id: s.id, d: path(s.feature) ?? '', colorIndex: s.colorIndex }))
     const sphereBounds = path.bounds({ type: 'Sphere' }) as Bounds
     return {
       projection,
@@ -221,7 +222,8 @@ export default function WorldMap({
       sphereWidth: sphereBounds[1][0] - sphereBounds[0][0],
       sphereD: path({ type: 'Sphere' }) ?? '',
       graticuleD: path(geoGraticule10()) ?? '',
-      shapes: world.shapes.map((s) => ({ id: s.id, d: path(s.feature) ?? '', colorIndex: s.colorIndex })),
+      shapes,
+      landD: shapes.map((s) => s.d).join(''),
     }
   }, [world, w, h])
 
@@ -393,8 +395,8 @@ export default function WorldMap({
         WebkitUserSelect: 'none',
         '& .counter': { transform: 'scale(var(--inv-k, 1))' },
         '& .land path': {
-          stroke: '#6b5a45',
-          strokeWidth: 0.6,
+          stroke: 'rgba(86,68,46,.85)',
+          strokeWidth: 0.45,
           vectorEffect: 'non-scaling-stroke',
           strokeLinejoin: 'round',
         },
@@ -432,10 +434,18 @@ export default function WorldMap({
                 <ShapePath key={s.id} id={s.id} d={s.d} color={tokens.land[s.colorIndex]} />
               ))}
             </g>
-            <g className="land" pointerEvents="none" style={{ filter: 'drop-shadow(0 0 0.5px rgba(46,36,24,.6))' }}>
+            <g className="land" pointerEvents="none">
               {highlighted.map(([id, kind]) => {
                 const s = geo.shapes.find((x) => x.id === id)
-                return s ? <path key={id} d={s.d} fill={KIND_FILL[kind]} style={{ strokeWidth: 1.2 }} /> : null
+                return s ? (
+                  <path
+                    key={id}
+                    d={s.d}
+                    fill={KIND_FILL[kind]}
+                    fillOpacity={0.92}
+                    style={{ strokeWidth: 0.7, stroke: 'rgba(58,46,32,.8)' }}
+                  />
+                ) : null
               })}
             </g>
             {lineD && (
@@ -443,8 +453,8 @@ export default function WorldMap({
                 d={lineD}
                 fill="none"
                 stroke={tokens.brickDark}
-                strokeWidth={1.6}
-                strokeDasharray="5 4"
+                strokeWidth={1.1}
+                strokeDasharray="4 3"
                 vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
               />
@@ -458,12 +468,12 @@ export default function WorldMap({
                     <g className="counter">
                       <circle
                         data-id={r.id}
-                        r={kind ? 11 : 9}
+                        r={kind ? 10 : 9}
                         fill={kind ? KIND_FILL[kind] : 'rgba(255,250,235,.01)'}
                         fillOpacity={kind ? 0.55 : 1}
                         stroke={kind ? tokens.ink : tokens.inkSoft}
                         strokeOpacity={kind ? 1 : 0.7}
-                        strokeWidth={kind ? 1.6 : 1}
+                        strokeWidth={kind ? 1 : 0.8}
                         strokeDasharray={kind ? undefined : '2 2'}
                       />
                     </g>
@@ -479,11 +489,18 @@ export default function WorldMap({
                   <g key={i} transform={`translate(${p[0]},${p[1]})`}>
                     <g className="counter">
                       {m.kind === 'star' ? (
-                        <path d={STAR} fill={tokens.ink} stroke={tokens.paper} strokeWidth={2} paintOrder="stroke" />
+                        <path
+                          d={STAR}
+                          fill={tokens.ink}
+                          stroke={tokens.paperLight}
+                          strokeWidth={2}
+                          paintOrder="stroke"
+                          transform="scale(1.05)"
+                        />
                       ) : (
                         <>
-                          <circle r={7} fill={tokens.brick} stroke={tokens.paper} strokeWidth={2.5} />
-                          <circle r={2} fill={tokens.paper} />
+                          <circle r={5.5} fill={tokens.brick} stroke={tokens.paperLight} strokeWidth={2} />
+                          <circle r={1.6} fill={tokens.paperLight} />
                         </>
                       )}
                     </g>
@@ -500,16 +517,17 @@ export default function WorldMap({
                         y={l.dy ?? 0}
                         textAnchor="middle"
                         fontFamily={fontDisplay}
-                        fontStyle="italic"
                         fontWeight={700}
-                        fontSize={17}
+                        fontSize={13.5}
+                        letterSpacing="0.14em"
                         fill={tokens.ink}
-                        stroke={tokens.paper}
-                        strokeWidth={4.5}
+                        stroke={tokens.paperLight}
+                        strokeOpacity={0.9}
+                        strokeWidth={3.2}
                         strokeLinejoin="round"
                         paintOrder="stroke"
                       >
-                        {l.text}
+                        {l.text.toUpperCase()}
                       </text>
                     </g>
                   </g>
@@ -537,6 +555,15 @@ export default function WorldMap({
         />
       )}
 
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          boxShadow: 'inset 0 0 36px rgba(120,90,50,.28), inset 0 0 0 1px rgba(58,46,32,.2)',
+        }}
+      />
+
       {interactive && <CompassRose />}
 
       {interactive && (
@@ -547,7 +574,7 @@ export default function WorldMap({
             bottom: 8,
             display: 'flex',
             flexDirection: 'column',
-            gap: '6px',
+            gap: '4px',
           }}
         >
           {(
@@ -564,19 +591,18 @@ export default function WorldMap({
               aria-label={label}
               onClick={action}
               sx={{
-                width: 42,
-                height: 42,
+                width: 40,
+                height: 40,
                 fontFamily: fontDisplay,
-                fontSize: 24,
-                fontWeight: 700,
+                fontSize: 22,
+                fontWeight: 500,
                 lineHeight: 1,
                 color: tokens.ink,
-                background: tokens.paper,
-                border: `1.5px solid ${tokens.ink}`,
-                borderRadius: '3px',
+                background: 'rgba(249,243,227,.92)',
+                border: `1px solid ${tokens.hair}`,
+                borderRadius: '2px',
                 cursor: 'pointer',
-                boxShadow: `2px 2px 0 ${tokens.ink}`,
-                '&:active': { transform: 'translate(1px,1px)', boxShadow: `1px 1px 0 ${tokens.ink}` },
+                '&:active': { background: tokens.paper },
               }}
             >
               {glyph}

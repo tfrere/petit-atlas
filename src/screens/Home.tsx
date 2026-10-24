@@ -1,8 +1,6 @@
 import { useMemo } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import ToggleButton from '@mui/material/ToggleButton'
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Typography from '@mui/material/Typography'
 import { REGIONS } from '../data/regions'
 import type { RegionId } from '../data/types'
@@ -13,8 +11,9 @@ import type { GameConfig } from '../game/records'
 import { poolFor } from '../game/targets'
 import type { PlayMode, TargetKind } from '../game/targets'
 import WorldMap from '../map/WorldMap'
-import { fontDisplay, tokens } from '../theme'
+import { fontBody, fontDisplay, tokens } from '../theme'
 import Cartouche from '../ui/Cartouche'
+import Segmented from '../ui/Segmented'
 
 interface Props {
   world: WorldData
@@ -25,16 +24,41 @@ interface Props {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Box sx={{ mb: 2.25 }}>
-      <Typography variant="overline" sx={{ display: 'block', color: tokens.inkSoft, mb: 0.75 }}>
-        {title}
-      </Typography>
+    <Box sx={{ mb: 2.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1 }}>
+        <Typography variant="overline" sx={{ color: tokens.inkSoft, whiteSpace: 'nowrap' }}>
+          {title}
+        </Typography>
+        <Box sx={{ flex: 1, height: '1px', background: tokens.hairSoft }} />
+      </Box>
       {children}
     </Box>
   )
 }
 
-const groupSx = { display: 'flex', width: '100%', '& .MuiToggleButton-root': { flex: 1 } }
+function Ornament() {
+  return (
+    <Box
+      sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.25, color: tokens.brick, mt: 1.25 }}
+    >
+      <Box sx={{ width: 56, height: '1px', background: tokens.hair }} />
+      <Box component="svg" viewBox="-10 -10 20 20" sx={{ width: 13, height: 13 }} aria-hidden>
+        <path d="M0,-9 L2,-2 L9,0 L2,2 L0,9 L-2,2 L-9,0 L-2,-2 Z" fill="currentColor" />
+      </Box>
+      <Box sx={{ width: 56, height: '1px', background: tokens.hair }} />
+    </Box>
+  )
+}
+
+const TARGET_OPTIONS = [
+  { value: 'country' as const, label: 'Pays' },
+  { value: 'capital' as const, label: 'Capitales' },
+]
+const MODE_OPTIONS = [
+  { value: 'name' as const, label: 'Je nomme', hint: 'la carte, j’écris' },
+  { value: 'locate' as const, label: 'Je situe', hint: 'le nom, je touche' },
+]
+const COUNTS = [10, 20, 0]
 
 export default function Home({ world, config, onChange, onPlay }: Props) {
   const total = useMemo(() => poolFor(config.target, config.region, COUNTRIES).length, [config.target, config.region])
@@ -55,25 +79,33 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
         pb: 'max(16px, env(safe-area-inset-bottom))',
       }}
     >
-      <Cartouche sx={{ width: '100%', maxWidth: 520, alignSelf: 'flex-start', p: { xs: 2.25, sm: 3.25 }, my: 'auto' }}>
-        <Box sx={{ textAlign: 'center', mb: 1.5 }}>
+      <Cartouche sx={{ width: '100%', maxWidth: 500, alignSelf: 'flex-start', p: { xs: 3, sm: 4 }, my: 'auto' }}>
+        <Box sx={{ textAlign: 'center', mb: 2.5 }}>
           <Typography variant="overline" sx={{ color: tokens.brick }}>
             Géographie au chrono
           </Typography>
           <Typography
             variant="h1"
-            sx={{ fontSize: { xs: '2.6rem', sm: '3.1rem' }, lineHeight: 1, mt: 0.25, fontFamily: fontDisplay }}
+            sx={{
+              fontSize: { xs: '2.9rem', sm: '3.4rem' },
+              lineHeight: 1,
+              mt: 0.5,
+              fontFamily: fontDisplay,
+              fontStyle: 'italic',
+            }}
           >
             Le Petit Atlas
           </Typography>
+          <Ornament />
         </Box>
 
         <Box
           sx={{
-            height: { xs: 118, sm: 150 },
-            mb: 2.25,
-            border: `1.5px solid ${tokens.ink}`,
-            borderRadius: '2px',
+            height: { xs: 120, sm: 150 },
+            mb: 3,
+            border: `1px solid ${tokens.hair}`,
+            outline: `1px solid ${tokens.hairSoft}`,
+            outlineOffset: 3,
             overflow: 'hidden',
             background: tokens.paper,
           }}
@@ -81,115 +113,76 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
           <WorldMap world={world} region={config.region} interactive={false} view={{ key: config.region }} />
         </Box>
 
-        <Section title="Ce que tu cherches">
-          <ToggleButtonGroup
-            exclusive
-            fullWidth
+        <Section title="Je cherche">
+          <Segmented
+            label="Cible"
             value={config.target}
-            onChange={(_, v: TargetKind | null) => v && set({ target: v })}
-            sx={groupSx}
-          >
-            <ToggleButton value="country">Pays</ToggleButton>
-            <ToggleButton value="capital">Capitales</ToggleButton>
-          </ToggleButtonGroup>
+            options={TARGET_OPTIONS}
+            onChange={(v: TargetKind) => set({ target: v })}
+          />
         </Section>
 
-        <Section title="Comment tu joues">
-          <ToggleButtonGroup
-            exclusive
-            fullWidth
+        <Section title="Je joue">
+          <Segmented
+            label="Mode"
             value={config.mode}
-            onChange={(_, v: PlayMode | null) => v && set({ mode: v })}
-            sx={groupSx}
-          >
-            <ToggleButton value="name">
-              <Box>
-                Je nomme
-                <Typography
-                  component="span"
-                  sx={{ display: 'block', fontSize: '0.8rem', opacity: 0.75, fontWeight: 400 }}
-                >
-                  la carte → j’écris
-                </Typography>
-              </Box>
-            </ToggleButton>
-            <ToggleButton value="locate">
-              <Box>
-                Je situe
-                <Typography
-                  component="span"
-                  sx={{ display: 'block', fontSize: '0.8rem', opacity: 0.75, fontWeight: 400 }}
-                >
-                  le nom → je touche
-                </Typography>
-              </Box>
-            </ToggleButton>
-          </ToggleButtonGroup>
+            options={MODE_OPTIONS}
+            onChange={(v: PlayMode) => set({ mode: v })}
+          />
         </Section>
 
         <Section title="Où">
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }} role="radiogroup" aria-label="Région">
             {REGIONS.map((r) => {
               const selected = r.id === config.region
               return (
-                <Button
+                <Box
                   key={r.id}
-                  size="small"
-                  variant={selected ? 'contained' : 'outlined'}
-                  color={selected ? 'inherit' : 'primary'}
+                  component="button"
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
                   onClick={() => set({ region: r.id as RegionId })}
                   sx={{
                     minHeight: 40,
                     px: 1.5,
+                    fontFamily: fontBody,
                     fontSize: '1rem',
-                    ...(selected && {
-                      background: tokens.ink,
-                      color: '#fbf5e6',
-                      '&:hover': { background: tokens.ink },
-                    }),
+                    fontWeight: selected ? 600 : 400,
+                    color: selected ? tokens.brickDark : tokens.ink,
+                    background: selected ? 'rgba(168,69,43,.09)' : 'transparent',
+                    border: `1px solid ${selected ? tokens.brick : tokens.hair}`,
+                    borderRadius: '2px',
+                    cursor: 'pointer',
                   }}
                 >
                   {r.label}
-                </Button>
+                </Box>
               )
             })}
           </Box>
         </Section>
 
-        <Section title="Longueur de la série">
-          <ToggleButtonGroup
-            exclusive
-            fullWidth
+        <Section title="Série">
+          <Segmented
+            label="Longueur de la série"
             value={config.count}
-            onChange={(_, v: number | null) => v !== null && set({ count: v })}
-            sx={groupSx}
-          >
-            <ToggleButton value={10}>10</ToggleButton>
-            <ToggleButton value={20}>20</ToggleButton>
-            <ToggleButton value={0}>Tous ({total})</ToggleButton>
-          </ToggleButtonGroup>
+            options={COUNTS.map((n) => ({ value: n, label: n === 0 ? `Tous · ${total}` : String(n) }))}
+            onChange={(v: number) => set({ count: v })}
+          />
         </Section>
 
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            borderTop: `1px dashed ${tokens.inkSoft}`,
-            pt: 1.25,
-            mb: 1.5,
-          }}
-        >
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1.75 }}>
           <Typography variant="overline" sx={{ color: tokens.inkSoft }}>
             Record
           </Typography>
-          <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: '1.35rem' }}>
+          <Typography sx={{ fontFamily: fontDisplay, fontWeight: 600, fontSize: '1.4rem', lineHeight: 1 }}>
             {record ? (
               <>
                 {formatTime(record.ms)}
                 <Typography
                   component="span"
-                  sx={{ fontSize: '0.95rem', color: tokens.inkSoft, ml: 1, fontFamily: 'inherit' }}
+                  sx={{ fontSize: '0.95rem', color: tokens.inkSoft, ml: 1, fontFamily: fontBody, fontWeight: 400 }}
                 >
                   {record.errors} erreur{record.errors > 1 ? 's' : ''}
                 </Typography>
@@ -197,7 +190,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             ) : (
               <Typography
                 component="span"
-                sx={{ fontSize: '1rem', fontWeight: 400, fontStyle: 'italic', color: tokens.inkSoft }}
+                sx={{ fontSize: '1.05rem', fontWeight: 400, fontStyle: 'italic', color: tokens.inkSoft }}
               >
                 à établir
               </Typography>
@@ -205,20 +198,13 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
           </Typography>
         </Box>
 
-        <Button
-          fullWidth
-          variant="contained"
-          color="primary"
-          size="large"
-          onClick={onPlay}
-          sx={{ minHeight: 56, fontSize: '1.25rem' }}
-        >
+        <Button fullWidth variant="contained" color="primary" size="large" onClick={onPlay} sx={{ minHeight: 54 }}>
           Jouer · {effectiveCount} questions
         </Button>
         <Typography
-          sx={{ textAlign: 'center', mt: 1.25, fontSize: '0.85rem', color: tokens.inkSoft, fontStyle: 'italic' }}
+          sx={{ textAlign: 'center', mt: 1.5, fontSize: '0.88rem', color: tokens.inkSoft, fontStyle: 'italic' }}
         >
-          Chaque erreur ajoute 5 s au chrono.
+          Chaque erreur ajoute 5 secondes au chrono.
         </Typography>
       </Cartouche>
     </Box>

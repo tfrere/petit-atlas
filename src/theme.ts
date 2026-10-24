@@ -1,24 +1,35 @@
 import { createTheme } from '@mui/material/styles'
 
 export const tokens = {
-  paper: '#f2e8d0',
-  paperDeep: '#e8dbbb',
-  ink: '#2e2418',
-  inkSoft: '#5d4c37',
-  ocean: '#cfdcd3',
-  brick: '#b4472a',
-  brickDark: '#8a2f1d',
-  sage: '#5f8450',
-  wrong: '#9b2d30',
-  gold: '#b88a2e',
-  land: ['#ead7a8', '#cfd6a9', '#e6bfa1', '#d9cdae', '#bccbc2'],
+  paper: '#f3ead4',
+  paperLight: '#f9f3e3',
+  ink: '#3a2e20',
+  inkSoft: '#6e5c45',
+  hair: 'rgba(58,46,32,.55)',
+  hairSoft: 'rgba(58,46,32,.28)',
+  ocean: '#d9e3dc',
+  oceanLine: '#9fb6ab',
+  brick: '#a8452b',
+  brickDark: '#7d3220',
+  sage: '#6b8c5a',
+  wrong: '#a23b3b',
+  target: '#cf7e50',
+  land: ['#f0e4c0', '#e1e3c2', '#eed5b9', '#e6dcc2', '#d6dfd0'],
 }
 
 export const fontDisplay = '"Cormorant Garamond", "Iowan Old Style", Georgia, serif'
 export const fontBody = '"Crimson Pro", "Iowan Old Style", Georgia, serif'
 
+/** Deux filets fins, l'un contre l'autre, à poser en bas (ou en haut) d'un bandeau. */
+export const doubleRule = (side: 'bottom' | 'top') => ({
+  backgroundImage: `linear-gradient(${tokens.hair}, ${tokens.hair}), linear-gradient(${tokens.hairSoft}, ${tokens.hairSoft})`,
+  backgroundSize: '100% 1px, 100% 1px',
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: side === 'bottom' ? 'left bottom, left calc(100% - 3px)' : 'left top, left 3px',
+})
+
 const grain =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .35 0 0 0 0 .27 0 0 0 0 .16 0 0 0 .1 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")"
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .35 0 0 0 0 .27 0 0 0 0 .16 0 0 0 .07 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")"
 
 export const theme = createTheme({
   palette: {
@@ -27,21 +38,28 @@ export const theme = createTheme({
     secondary: { main: tokens.sage },
     error: { main: tokens.wrong },
     success: { main: tokens.sage },
-    background: { default: tokens.paper, paper: '#f7efdb' },
+    background: { default: tokens.paper, paper: tokens.paperLight },
     text: { primary: tokens.ink, secondary: tokens.inkSoft },
   },
-  shape: { borderRadius: 3 },
+  shape: { borderRadius: 2 },
   typography: {
     fontFamily: fontBody,
-    fontSize: 17,
-    h1: { fontFamily: fontDisplay, fontWeight: 700, letterSpacing: '0.01em' },
-    h2: { fontFamily: fontDisplay, fontWeight: 700 },
-    h3: { fontFamily: fontDisplay, fontWeight: 700 },
-    h4: { fontFamily: fontDisplay, fontWeight: 700 },
-    h5: { fontFamily: fontDisplay, fontWeight: 700 },
-    h6: { fontFamily: fontDisplay, fontWeight: 700 },
-    button: { fontFamily: fontBody, fontWeight: 600, textTransform: 'none', letterSpacing: '0.02em' },
-    overline: { fontFamily: fontBody, fontWeight: 600, letterSpacing: '0.18em', lineHeight: 1.4 },
+    fontSize: 16,
+    h1: { fontFamily: fontDisplay, fontWeight: 500 },
+    h2: { fontFamily: fontDisplay, fontWeight: 500 },
+    h3: { fontFamily: fontDisplay, fontWeight: 500 },
+    h4: { fontFamily: fontDisplay, fontWeight: 500 },
+    h5: { fontFamily: fontDisplay, fontWeight: 500 },
+    h6: { fontFamily: fontDisplay, fontWeight: 500 },
+    button: { fontFamily: fontBody, fontWeight: 500, textTransform: 'none', letterSpacing: '0.03em' },
+    overline: {
+      fontFamily: fontBody,
+      fontWeight: 500,
+      fontSize: '0.72rem',
+      letterSpacing: '0.24em',
+      textTransform: 'uppercase',
+      lineHeight: 1.5,
+    },
   },
   components: {
     MuiCssBaseline: {
@@ -59,51 +77,51 @@ export const theme = createTheme({
       },
     },
     MuiButton: {
-      defaultProps: { disableElevation: true },
+      defaultProps: { disableElevation: true, disableRipple: true },
       variants: [
         {
           props: { variant: 'contained', color: 'primary' },
           style: {
-            border: `1.5px solid ${tokens.ink}`,
-            boxShadow: `3px 3px 0 ${tokens.ink}`,
-            '&:hover': { boxShadow: `3px 3px 0 ${tokens.ink}` },
-            '&:active': { transform: 'translate(2px, 2px)', boxShadow: `1px 1px 0 ${tokens.ink}` },
+            background: tokens.brick,
+            color: '#fbf5e6',
+            border: `1px solid ${tokens.brickDark}`,
+            boxShadow: `inset 0 0 0 2px ${tokens.brick}, inset 0 0 0 3px rgba(251,245,230,.45)`,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            fontSize: '0.88rem',
+            fontWeight: 600,
+            '&:hover': { background: tokens.brickDark },
+            '&:active': { background: tokens.brickDark },
           },
         },
       ],
       styleOverrides: {
-        root: { borderRadius: 3, minHeight: 48, fontSize: '1.05rem' },
+        root: { borderRadius: 2, minHeight: 46, fontSize: '1rem' },
         outlined: {
-          borderColor: tokens.ink,
+          borderColor: tokens.hair,
           color: tokens.ink,
-          borderWidth: 1.5,
-          '&:hover': { borderWidth: 1.5, borderColor: tokens.ink, backgroundColor: 'rgba(46,36,24,.06)' },
-        },
-      },
-    },
-    MuiToggleButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-          fontFamily: fontBody,
-          fontSize: '1.02rem',
-          fontWeight: 600,
-          color: tokens.ink,
-          borderColor: tokens.ink,
-          borderWidth: 1.5,
-          minHeight: 48,
-          lineHeight: 1.15,
-          '&.Mui-selected': {
-            color: '#fbf5e6',
-            backgroundColor: tokens.ink,
-            '&:hover': { backgroundColor: tokens.ink },
-          },
+          borderWidth: 1,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          fontSize: '0.85rem',
+          fontWeight: 500,
+          '&:hover': { borderWidth: 1, borderColor: tokens.ink, backgroundColor: 'rgba(58,46,32,.05)' },
         },
       },
     },
     MuiChip: {
       styleOverrides: {
-        root: { fontFamily: fontBody, fontWeight: 600, borderRadius: 3 },
+        root: { fontFamily: fontBody, fontWeight: 500, borderRadius: 2, height: 28 },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          background: tokens.paperLight,
+          border: `1px solid ${tokens.hair}`,
+          boxShadow: `inset 0 0 0 4px ${tokens.paperLight}, inset 0 0 0 5px ${tokens.hairSoft}, 0 12px 40px rgba(58,46,32,.25)`,
+          borderRadius: 2,
+        },
       },
     },
   },

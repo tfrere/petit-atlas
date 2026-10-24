@@ -29,7 +29,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.35 }}>
       <Typography sx={{ color: tokens.inkSoft }}>{label}</Typography>
-      <Typography sx={{ fontWeight: 600 }}>{value}</Typography>
+      <Typography sx={{ fontWeight: 500 }}>{value}</Typography>
     </Box>
   )
 }
@@ -54,11 +54,11 @@ export default function Result({ game, onReplay, onMenu }: Props) {
         pb: 'max(16px, env(safe-area-inset-bottom))',
       }}
     >
-      <Cartouche sx={{ width: '100%', maxWidth: 520, alignSelf: 'flex-start', p: { xs: 2.25, sm: 3.25 }, my: 'auto' }}>
+      <Cartouche sx={{ width: '100%', maxWidth: 520, alignSelf: 'flex-start', p: { xs: 3, sm: 4 }, my: 'auto' }}>
         <Typography variant="overline" sx={{ display: 'block', textAlign: 'center', color: tokens.brick }}>
           {what} · {how} · {region}
         </Typography>
-        <Typography variant="h2" sx={{ textAlign: 'center', fontSize: '2rem', mb: 1.5 }}>
+        <Typography variant="h2" sx={{ textAlign: 'center', fontSize: '2.3rem', fontStyle: 'italic', mb: 2 }}>
           Série terminée
         </Typography>
 
@@ -66,15 +66,15 @@ export default function Result({ game, onReplay, onMenu }: Props) {
           sx={{
             textAlign: 'center',
             py: 1.5,
-            borderTop: `1px dashed ${tokens.inkSoft}`,
-            borderBottom: `1px dashed ${tokens.inkSoft}`,
+            borderTop: `1px solid ${tokens.hairSoft}`,
+            borderBottom: `1px solid ${tokens.hairSoft}`,
           }}
         >
           <Typography
             sx={{
               fontFamily: fontDisplay,
-              fontWeight: 700,
-              fontSize: '3.6rem',
+              fontWeight: 500,
+              fontSize: '4rem',
               lineHeight: 1,
               color: isRecord ? tokens.brick : tokens.ink,
             }}
@@ -84,7 +84,16 @@ export default function Result({ game, onReplay, onMenu }: Props) {
           {isRecord ? (
             <Chip
               label={previous ? 'Nouveau record !' : 'Premier record établi'}
-              sx={{ mt: 1, background: tokens.brick, color: '#fbf5e6', fontSize: '0.95rem' }}
+              sx={{
+                mt: 1.25,
+                background: 'transparent',
+                color: tokens.brick,
+                border: `1px solid ${tokens.brick}`,
+                fontSize: '0.78rem',
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                fontWeight: 600,
+              }}
             />
           ) : (
             previous && (
@@ -117,7 +126,7 @@ export default function Result({ game, onReplay, onMenu }: Props) {
                   label={
                     a.question.kind === 'capital' ? `${a.question.label} · ${a.question.countryName}` : a.question.label
                   }
-                  sx={{ borderColor: tokens.ink, color: tokens.ink, background: 'rgba(155,45,48,.08)' }}
+                  sx={{ borderColor: tokens.hair, color: tokens.ink, background: 'rgba(162,59,59,.07)' }}
                 />
               ))}
             </Box>
