@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import Box from '@mui/material/Box'
-import { keyframes } from '@emotion/react'
 import { geoArea, geoGraticule, geoPath } from 'd3-geo'
 import type { GeoProjection } from 'd3-geo'
 import { easeCubicInOut } from 'd3-ease'
@@ -87,11 +86,6 @@ const KIND_FILL: Record<HighlightKind, string> = {
   correct: tokens.sage,
   wrong: tokens.wrong,
 }
-
-const ripple = keyframes`
-  from { transform: scale(0.3); opacity: 0.9; }
-  to { transform: scale(1.6); opacity: 0; }
-`
 
 const STAR = 'M0,-9 L2.6,-3.2 L8.6,-2.8 L4,1.4 L5.3,7.3 L0,4.3 L-5.3,7.3 L-4,1.4 L-8.6,-2.8 L-2.6,-3.2 Z'
 
@@ -225,7 +219,6 @@ export default function WorldMap({
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null)
   const firstView = useRef(true)
   const { w, h } = useElementSize(wrapRef)
-  const [splash, setSplash] = useState<{ x: number; y: number; n: number } | null>(null)
 
   const geo = useMemo(() => {
     if (w < 10 || h < 10) return null
@@ -567,7 +560,6 @@ export default function WorldMap({
       const [mx, my] = transform.apply(mp)
       return Math.hypot(mx - sx, my - sy) < SELECT_RADIUS_PX
     })
-    setSplash({ x: sx, y: sy, n: Date.now() })
     onTap({ id, lon: valid ? lonlat![0] : null, lat: valid ? lonlat![1] : null, nearSelected })
   }
 
@@ -758,23 +750,6 @@ export default function WorldMap({
           </g>
         )}
       </svg>
-
-      {splash && (
-        <Box
-          key={splash.n}
-          sx={{
-            position: 'absolute',
-            left: splash.x - 18,
-            top: splash.y - 18,
-            width: 36,
-            height: 36,
-            borderRadius: '50%',
-            border: `2px solid ${tokens.ink}`,
-            pointerEvents: 'none',
-            animation: `${ripple} 520ms ease-out forwards`,
-          }}
-        />
-      )}
 
       {vignette && (
         <Box
