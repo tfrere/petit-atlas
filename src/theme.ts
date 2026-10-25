@@ -10,6 +10,7 @@ export const tokens = {
   ocean: '#d9e3dc',
   oceanLine: '#9fb6ab',
   brick: '#a8452b',
+  cold: '#2f6288',
   brickDark: '#7d3220',
   sage: '#6b8c5a',
   wrong: '#a23b3b',

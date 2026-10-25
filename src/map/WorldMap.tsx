@@ -10,13 +10,23 @@ import { zoom as d3zoom, zoomIdentity, zoomTransform } from 'd3-zoom'
 import type { ZoomBehavior, ZoomTransform } from 'd3-zoom'
 import 'd3-transition'
 import type { Feature, MultiPolygon, Polygon } from 'geojson'
-import { regionById } from '../data/regions'
+import { flowGeometry } from '../data/flowGeometry'
+import { FLOW_BY_ID } from '../data/flows'
+import { isContinent, isWholeWorld, regionById } from '../data/regions'
 import type { RegionId } from '../data/types'
 import { COUNTRIES } from '../data/world'
 import type { WorldData } from '../data/world'
 import { fontBody, tokens } from '../theme'
 
 export type HighlightKind = 'target' | 'selected' | 'correct' | 'wrong'
+
+export type FlowState = HighlightKind
+
+/** Courant ou vent à tracer ; `state` choisit la couleur (celle du courant chaud ou froid quand c'est la cible). */
+export interface MapFlow {
+  id: string
+  state: FlowState
+}
 
 export interface MapMarker {
   lon: number
@@ -35,6 +45,8 @@ export interface MapView {
   key: string | number
   ids?: string[]
   points?: [number, number][]
+  /** Courants et vents à cadrer. */
+  flows?: string[]
   /** Largeur minimale de la vue, en fraction de la largeur du monde. */
   minSpan?: number
   pad?: number
@@ -55,6 +67,7 @@ interface Props {
   highlights?: Record<string, HighlightKind>
   markers?: MapMarker[]
   labels?: MapLabel[]
+  flows?: MapFlow[]
   line?: [[number, number], [number, number]] | null
   view?: MapView
   interactive?: boolean
@@ -134,7 +147,10 @@ function focusBounds(
   return unionBounds(near.map((p) => p.bounds))
 }
 
-function regionBounds(box: [number, number, number, number], projection: GeoProjection): Bounds {
+function regionBounds(
+  box: [number, number, number, number],
+  xy: (lon: number, lat: number) => [number, number],
+): Bounds {
   const [x0, y0, x1, y1] = box
   const pts: [number, number][] = []
   for (let i = 0; i <= 8; i++) {
@@ -142,10 +158,10 @@ function regionBounds(box: [number, number, number, number], projection: GeoProj
     const lat = y0 + ((y1 - y0) * i) / 8
     pts.push([lon, y0], [lon, y1], [x0, lat], [x1, lat])
   }
-  const xy = pts.map((p) => projection(p)).filter((p): p is [number, number] => !!p)
+  const proj = pts.map((p) => xy(p[0], p[1]))
   return [
-    [Math.min(...xy.map((p) => p[0])), Math.min(...xy.map((p) => p[1]))],
-    [Math.max(...xy.map((p) => p[0])), Math.max(...xy.map((p) => p[1]))],
+    [Math.min(...proj.map((p) => p[0])), Math.min(...proj.map((p) => p[1]))],
+    [Math.max(...proj.map((p) => p[0])), Math.max(...proj.map((p) => p[1]))],
   ]
 }
 
@@ -231,6 +247,50 @@ function record(projection: GeoProjection, feature: Feature<Polygon | MultiPolyg
   return rec.path
 }
 
+interface BuiltFlow {
+  d: Path2D
+  paths: { pts: [number, number][]; cum: number[] }[]
+}
+
+const FLOW_STATE_COLOR: Record<FlowState, string | null> = {
+  target: null,
+  selected: tokens.selected,
+  correct: tokens.sage,
+  wrong: tokens.wrong,
+}
+
+function flowColor(id: string, state: FlowState): string {
+  const forced = FLOW_STATE_COLOR[state]
+  if (forced) return forced
+  const flow = FLOW_BY_ID.get(id)
+  if (flow?.kind === 'wind') return tokens.ink
+  return flow?.temp === 'warm' ? tokens.brick : flow?.temp === 'cold' ? tokens.cold : tokens.inkSoft
+}
+
+const MAX_ARROWS_PER_PATH = 120
+
+/** Parcourt un tracé de l'arrivée vers le départ et pose une flèche tous les `spacingPx` pixels d'écran. */
+function walkArrows(
+  path: BuiltFlow['paths'][number],
+  k: number,
+  spacingPx: number,
+  emit: (x: number, y: number, angle: number) => void,
+) {
+  const { pts, cum } = path
+  const total = cum[cum.length - 1]
+  if (total <= 0) return
+  const spacing = Math.max(spacingPx / k, total / MAX_ARROWS_PER_PATH)
+  let seg = pts.length - 2
+  for (let d = total; d > spacing * 0.35 || d === total; d -= spacing) {
+    while (seg > 0 && cum[seg] > d) seg--
+    const span = cum[seg + 1] - cum[seg] || 1
+    const f = Math.min(1, Math.max(0, (d - cum[seg]) / span))
+    const [x0, y0] = pts[seg]
+    const [x1, y1] = pts[seg + 1]
+    emit(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, Math.atan2(y1 - y0, x1 - x0))
+  }
+}
+
 interface CanvasShape {
   id: string
   bounds: Bounds
@@ -244,6 +304,7 @@ export default function WorldMap({
   highlights = {},
   markers = [],
   labels = [],
+  flows = [],
   line = null,
   view,
   interactive = true,
@@ -290,6 +351,10 @@ export default function WorldMap({
       [180, MAP_LAT_MAX],
     ])
     const wrapX = interactive && !still
+    const xy = (lon: number, lat: number): [number, number] => [
+      x0 + ((lon + 180) / 360) * (x1 - x0),
+      (projection([0, lat]) ?? [0, 0])[1],
+    ]
     const panExtent: Bounds = wrapX
       ? [
           [-Infinity, y0],
@@ -298,6 +363,7 @@ export default function WorldMap({
       : sphereBounds
     return {
       projection,
+      xy,
       path,
       sphereBounds,
       minK: wrapX ? Math.max(1, h / (y1 - y0)) : 1,
@@ -318,7 +384,7 @@ export default function WorldMap({
   }, [world, w, h, still, interactive])
 
   const inScope = useMemo(
-    () => (region === 'world' ? null : new Set(COUNTRIES.filter((c) => c.region === region).map((c) => c.id))),
+    () => (isContinent(region) ? new Set(COUNTRIES.filter((c) => c.region === region).map((c) => c.id)) : null),
     [region],
   )
 
@@ -341,6 +407,28 @@ export default function WorldMap({
   }, [geo, line])
 
   const starPath = useMemo(() => new Path2D(STAR_PATH), [])
+
+  const flowCache = useRef<{ geo: unknown; built: Map<string, BuiltFlow> }>({ geo: null, built: new Map() })
+  const buildFlow = (id: string): BuiltFlow | null => {
+    if (!geo) return null
+    if (flowCache.current.geo !== geo) flowCache.current = { geo, built: new Map() }
+    const hit = flowCache.current.built.get(id)
+    if (hit) return hit
+    const g = flowGeometry(id)
+    if (!g) return null
+    const d = new Path2D()
+    const paths = g.paths.map((p) => {
+      const pts = p.map(([lon, lat]) => geo.xy(lon, lat))
+      pts.forEach(([x, y], i) => (i ? d.lineTo(x, y) : d.moveTo(x, y)))
+      const cum = pts.map(() => 0)
+      for (let i = 1; i < pts.length; i++)
+        cum[i] = cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
+      return { pts, cum }
+    })
+    const built = { d, paths }
+    flowCache.current.built.set(id, built)
+    return built
+  }
 
   const wrapTransform = useCallback(
     (t: ZoomTransform): ZoomTransform => {
@@ -462,6 +550,31 @@ export default function WorldMap({
           ctx.strokeStyle = 'rgba(58,46,32,.8)'
           ctx.stroke(lod ? s.low : s.full)
         }
+        for (const f of flows) {
+          const built = buildFlow(f.id)
+          if (!built) continue
+          const color = flowColor(f.id, f.state)
+          ctx.lineCap = 'round'
+          if (FLOW_BY_ID.get(f.id)?.kind === 'wind') {
+            ctx.globalAlpha = 0.26
+            ctx.lineWidth = 15 / k
+            ctx.strokeStyle = color
+            ctx.stroke(built.d)
+            ctx.globalAlpha = 1
+            ctx.lineWidth = 2.2 / k
+            ctx.setLineDash([7 / k, 5 / k])
+            ctx.stroke(built.d)
+            ctx.setLineDash([])
+          } else {
+            ctx.lineWidth = 7 / k
+            ctx.strokeStyle = 'rgba(249,243,227,.82)'
+            ctx.stroke(built.d)
+            ctx.lineWidth = 3.4 / k
+            ctx.strokeStyle = color
+            ctx.stroke(built.d)
+          }
+          ctx.lineCap = 'butt'
+        }
         if (linePath) {
           ctx.lineWidth = 1.1 / k
           ctx.strokeStyle = tokens.brickDark
@@ -479,6 +592,52 @@ export default function WorldMap({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       const margin = 24
       const onScreen = (x: number, y: number) => x > -margin && x < w + margin && y > -margin && y < h + margin
+
+      for (const f of flows) {
+        const flow = FLOW_BY_ID.get(f.id)
+        const built = buildFlow(f.id)
+        if (!flow || !built || flow.arrows === false) continue
+        const color = flowColor(f.id, f.state)
+        const isWind = flow.kind === 'wind'
+        for (const dx of offsets) {
+          for (const path of built.paths) {
+            walkArrows(path, k, isWind ? 74 : 112, (mx, my, angle) => {
+              const x = t.x + k * (mx + dx)
+              const y = t.y + k * my
+              if (!onScreen(x, y)) return
+              ctx.save()
+              ctx.translate(x, y)
+              ctx.rotate(angle)
+              ctx.lineJoin = 'round'
+              ctx.lineCap = 'round'
+              ctx.beginPath()
+              if (isWind) {
+                ctx.moveTo(-7, -6.5)
+                ctx.lineTo(2, 0)
+                ctx.lineTo(-7, 6.5)
+                ctx.lineWidth = 5.4
+                ctx.strokeStyle = 'rgba(249,243,227,.85)'
+                ctx.stroke()
+                ctx.lineWidth = 2.6
+                ctx.strokeStyle = color
+                ctx.stroke()
+              } else {
+                ctx.moveTo(7, 0)
+                ctx.lineTo(-5, -6)
+                ctx.lineTo(-2, 0)
+                ctx.lineTo(-5, 6)
+                ctx.closePath()
+                ctx.lineWidth = 2.4
+                ctx.strokeStyle = 'rgba(249,243,227,.9)'
+                ctx.stroke()
+                ctx.fillStyle = color
+                ctx.fill()
+              }
+              ctx.restore()
+            })
+          }
+        }
+      }
 
       const fade = Math.max(0, Math.min(1, (22 - k) / 10))
       if (fade > 0.01) {
@@ -686,15 +845,35 @@ export default function WorldMap({
         const b = shape ? focusBounds(shape.focus, geo.path, geo.sphereWidth) : null
         if (b) chunks.push(b)
       }
+      const flowChunks: Bounds[] = []
+      for (const id of v?.flows ?? []) {
+        const g = flowGeometry(id)
+        if (!g) continue
+        const xy = g.paths.flat().map(([lon, lat]) => geo.xy(lon, lat))
+        flowChunks.push([
+          [Math.min(...xy.map((p) => p[0])), Math.min(...xy.map((p) => p[1]))],
+          [Math.max(...xy.map((p) => p[0])), Math.max(...xy.map((p) => p[1]))],
+        ])
+      }
+      chunks.push(...flowChunks)
+      const flowCenter = flowChunks.length ? (unionBounds(flowChunks)[0][0] + unionBounds(flowChunks)[1][0]) / 2 : null
       for (const pt of v?.points ?? []) {
         const p = geo.projection(pt)
-        if (p) chunks.push([p, p])
+        if (!p) continue
+        const x =
+          flowCenter !== null && geo.wrapX
+            ? p[0] + geo.sphereWidth * Math.round((flowCenter - p[0]) / geo.sphereWidth)
+            : p[0]
+        chunks.push([
+          [x, p[1]],
+          [x, p[1]],
+        ])
       }
       if (chunks.length) {
         box = unionBounds(chunks)
       } else {
         const r = regionById(region)
-        if (r.id === 'world') {
+        if (isWholeWorld(r.id)) {
           const k = geo.minK
           const cx = geo.projection([WORLD_CENTER_LON, 30])?.[0] ?? w / 2
           const cy = (geo.sphereBounds[0][1] + geo.sphereBounds[1][1]) / 2
@@ -710,7 +889,7 @@ export default function WorldMap({
             ) ?? t
           )
         }
-        box = regionBounds(r.box, geo.projection)
+        box = regionBounds(r.box, geo.xy)
       }
       const minSpan = geo.sphereWidth * (chunks.length ? (v?.minSpan ?? 0.07) : 0)
       let bw = box[1][0] - box[0][0]

@@ -7,16 +7,18 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
 import Typography from '@mui/material/Typography'
-import { COUNTRIES } from '../data/world'
+import { flowGeometry } from '../data/flowGeometry'
+import { FLOW_BY_ID } from '../data/flows'
 import type { WorldData } from '../data/world'
+import { judgeFlowTap } from '../game/flows'
 import { judge } from '../game/matching'
 import { markFound } from '../game/progress'
 import type { GameConfig } from '../game/records'
-import { TARGETS, buildQuestions } from '../game/targets'
-import type { Question } from '../game/targets'
+import { TARGETS, buildQuestions, candidatesOf, isFlowKind, poolFor } from '../game/targets'
+import type { Question, TargetKind } from '../game/targets'
 import Hud from '../ui/Hud'
 import WorldMap from '../map/WorldMap'
-import type { HighlightKind, MapLabel, MapMarker, MapView, TapInfo } from '../map/WorldMap'
+import type { HighlightKind, MapFlow, MapLabel, MapMarker, MapView, TapInfo } from '../map/WorldMap'
 import { doubleRule, fontDisplay, tokens } from '../theme'
 
 export interface Answer {
@@ -50,6 +52,10 @@ interface Reveal {
   tappedId?: string | null
   tapped?: { lon: number; lat: number }
   km?: number
+  /** Courants et vents : point du tracé cherché le plus proche du toucher. */
+  at?: [number, number]
+  /** Courants et vents : autre tracé désigné par erreur. */
+  otherId?: string | null
 }
 
 const HALO = [
@@ -67,6 +73,8 @@ const halo = {
 }
 
 const CAPITAL_TOLERANCE_KM = 250
+/** Un toucher plus loin qu'une telle distance d'un tracé n'est pas inclus dans le cadrage de la correction. */
+const FRAME_TAP_KM = 2500
 const TIME_LIMIT_MS = { name: 20_000, locate: 15_000 }
 const FEEDBACK_GUARD_MS = 450
 
@@ -78,7 +86,10 @@ function distanceKm(a: [number, number], b: [number, number]) {
   return 12742 * Math.asin(Math.sqrt(h))
 }
 
+const flowView = (kind: TargetKind) => (kind === 'wind' ? { minSpan: 0.06, pad: 1.6 } : { minSpan: 0.14, pad: 1.7 })
+
 function makeNameView(world: WorldData, question: Question, key: number): MapView {
+  if (isFlowKind(question.kind)) return { key: `q${key}`, flows: [question.id], ...flowView(question.kind) }
   const hasShape = world.byId.has(question.id)
   const usePoints = question.kind === 'capital' || !hasShape
   return {
@@ -86,6 +97,25 @@ function makeNameView(world: WorldData, question: Question, key: number): MapVie
     ids: hasShape ? [question.id] : undefined,
     points: usePoints ? question.points.map((p) => [p.lon, p.lat] as [number, number]) : undefined,
   }
+}
+
+function FlowNote({ question }: { question: Question }) {
+  return (
+    <Box sx={{ mt: 0.25 }}>
+      <Typography
+        variant="overline"
+        sx={{
+          display: 'block',
+          fontSize: '0.6rem',
+          lineHeight: 1.5,
+          color: question.temp === 'cold' ? tokens.cold : tokens.brickDark,
+        }}
+      >
+        {question.context}
+      </Typography>
+      <Typography sx={{ color: tokens.ink, fontSize: '0.78rem', lineHeight: 1.3 }}>{question.note}</Typography>
+    </Box>
+  )
 }
 
 function useStopwatch() {
@@ -115,10 +145,11 @@ function useStopwatch() {
 
 export default function Play({ world, config, onExit, onFinish }: Props) {
   const questions = useMemo(
-    () => buildQuestions(config.target, config.region, config.count, COUNTRIES),
+    () => buildQuestions(config.target, config.region, config.count),
     [config.target, config.region, config.count],
   )
-  const pool = useMemo(() => TARGETS[config.target].pool(COUNTRIES), [config.target])
+  const pool = useMemo(() => candidatesOf(config.target), [config.target])
+  const poolIds = useMemo(() => poolFor(config.target, config.region).map((e) => e.id), [config.target, config.region])
 
   const [index, setIndex] = useState(0)
   const [phase, setPhase] = useState<Phase>('asking')
@@ -190,7 +221,14 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
       setReveal(extra)
       setPhase(ok ? 'correct' : 'wrong')
       feedbackAt.current = performance.now()
-      if (!ok && locate) {
+      if (!ok && locate && isFlowKind(q.kind)) {
+        setView({
+          key: `reveal${index}`,
+          flows: [q.id],
+          points: extra.tapped && (extra.km ?? 0) < FRAME_TAP_KM ? [[extra.tapped.lon, extra.tapped.lat]] : undefined,
+          ...flowView(q.kind),
+        })
+      } else if (!ok && locate) {
         const pts: [number, number][] = q.points.map((p) => [p.lon, p.lat])
         if (extra.tapped && q.kind === 'capital') pts.push([extra.tapped.lon, extra.tapped.lat])
         setView({
@@ -226,6 +264,10 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
     if (!selection || phase !== 'asking') return
     if (q.kind === 'country') {
       if (selection.id) record(selection.id === q.id, { tappedId: selection.id })
+    } else if (selection.lon !== undefined && selection.lat !== undefined && isFlowKind(q.kind)) {
+      const tapped = { lon: selection.lon, lat: selection.lat }
+      const verdict = judgeFlowTap([tapped.lon, tapped.lat], q.id, poolIds)
+      if (verdict) record(verdict.correct, { tapped, km: verdict.km, at: verdict.at, otherId: verdict.otherId })
     } else if (selection.lon !== undefined && selection.lat !== undefined) {
       const at: [number, number] = [selection.lon, selection.lat]
       const km = Math.min(...q.points.map((p) => distanceKm(at, [p.lon, p.lat])))
@@ -255,7 +297,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
 
   const highlights = useMemo(() => {
     const h: Record<string, HighlightKind> = {}
-    if (!q) return h
+    if (!q || isFlowKind(q.kind)) return h
     if (!locate) {
       h[q.id] = phase === 'asking' ? 'target' : phase === 'correct' ? 'correct' : 'wrong'
     } else if (phase === 'asking') {
@@ -276,7 +318,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
     const list: MapMarker[] = []
     const showStar = q.kind === 'capital' && (!locate || phase !== 'asking')
     if (showStar) q.points.forEach((p) => list.push({ lon: p.lon, lat: p.lat, kind: 'star' }))
-    if (locate && q.kind === 'capital') {
+    if (locate && q.kind !== 'country') {
       if (reveal.tapped) list.push({ ...reveal.tapped, kind: 'guess' })
       else if (phase === 'asking' && selection?.lon !== undefined && selection.lat !== undefined)
         list.push({ lon: selection.lon, lat: selection.lat, kind: 'guess' })
@@ -284,10 +326,33 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
     return list
   }, [q, locate, phase, reveal.tapped, selection])
 
+  const flows = useMemo<MapFlow[]>(() => {
+    if (!q || !isFlowKind(q.kind)) return []
+    if (!locate) return [{ id: q.id, state: phase === 'asking' ? 'target' : phase === 'correct' ? 'correct' : 'wrong' }]
+    if (phase === 'asking') return []
+    const list: MapFlow[] = [{ id: q.id, state: 'correct' }]
+    if (reveal.otherId) list.push({ id: reveal.otherId, state: 'wrong' })
+    return list
+  }, [q, locate, phase, reveal.otherId])
+
   const labels = useMemo<MapLabel[]>(() => {
     if (!q || phase === 'asking') return []
     const list: MapLabel[] = []
-    if (q.kind === 'capital') {
+    if (isFlowKind(q.kind)) {
+      const anchor = flowGeometry(q.id)?.anchor
+      if (anchor) list.push({ lon: anchor[0], lat: anchor[1], text: q.label, dy: -12 })
+      const other = reveal.otherId ? flowGeometry(reveal.otherId)?.anchor : null
+      if (other && reveal.otherId)
+        list.push({ lon: other[0], lat: other[1], text: FLOW_BY_ID.get(reveal.otherId)?.name ?? '', dy: -12 })
+      if (locate && reveal.km !== undefined && reveal.tapped) {
+        list.push({
+          lon: reveal.tapped.lon,
+          lat: reveal.tapped.lat,
+          text: `${Math.round(reveal.km).toLocaleString('fr-FR')} km`,
+          dy: 24,
+        })
+      }
+    } else if (q.kind === 'capital') {
       q.points.slice(0, 1).forEach((p) => list.push({ lon: p.lon, lat: p.lat, text: p.label, dy: 26 }))
       if (locate && reveal.km !== undefined && reveal.tapped) {
         list.push({
@@ -310,7 +375,15 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
   }, [q, phase, reveal, locate, world])
 
   const line = useMemo<[[number, number], [number, number]] | null>(() => {
-    if (!q || !locate || q.kind !== 'capital' || phase === 'asking' || !reveal.tapped) return null
+    if (!q || !locate || q.kind === 'country' || phase === 'asking' || !reveal.tapped) return null
+    if (isFlowKind(q.kind)) {
+      return reveal.at
+        ? [
+            [reveal.tapped.lon, reveal.tapped.lat],
+            [reveal.at[0], reveal.at[1]],
+          ]
+        : null
+    }
     const nearest = q.points.reduce((a, b) =>
       distanceKm([reveal.tapped!.lon, reveal.tapped!.lat], [a.lon, a.lat]) <=
       distanceKm([reveal.tapped!.lon, reveal.tapped!.lat], [b.lon, b.lat])
@@ -321,7 +394,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
       [reveal.tapped.lon, reveal.tapped.lat],
       [nearest.lon, nearest.lat],
     ]
-  }, [q, locate, phase, reveal.tapped])
+  }, [q, locate, phase, reveal.tapped, reveal.at])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -339,13 +412,12 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
 
   if (!q) return null
 
+  const noun = TARGETS[q.kind].noun
+  const feminine = q.kind === 'capital'
+  const tempWord = q.temp ? (q.temp === 'warm' ? ' chaud' : ' froid') : ''
   const prompt = locate
-    ? q.kind === 'country'
-      ? 'Situe ce pays'
-      : 'Situe cette capitale'
-    : q.kind === 'country'
-      ? 'Quel est ce pays ?'
-      : 'Quelle est cette capitale ?'
+    ? `Situe ${feminine ? 'cette' : 'ce'} ${noun}${tempWord}`
+    : `${feminine ? 'Quelle est cette' : 'Quel est ce'} ${noun}${tempWord} ?`
 
   const lastGiven = answers[answers.length - 1]?.given
   const wrongDetail =
@@ -357,9 +429,11 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
             ? reveal.tappedId
               ? `Tu as touché : ${world.byId.get(reveal.tappedId)?.name ?? '—'}`
               : null
-            : reveal.km !== undefined
-              ? `Tu étais à ${Math.round(reveal.km).toLocaleString('fr-FR')} km`
-              : null
+            : reveal.otherId
+              ? `Tu as désigné : ${FLOW_BY_ID.get(reveal.otherId)?.name ?? '—'}`
+              : reveal.km !== undefined
+                ? `Tu étais à ${Math.round(reveal.km).toLocaleString('fr-FR')} km`
+                : null
           : lastGiven
             ? `Tu as écrit : ${lastGiven}`
             : 'Passé'
@@ -405,10 +479,11 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
           highlights={highlights}
           markers={markers}
           labels={labels}
+          flows={flows}
           line={line}
           view={view}
           onTap={handleTap}
-          tapRings={locate}
+          tapRings={locate && !isFlowKind(q.kind)}
           interactive
         />
 
@@ -470,6 +545,27 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
           </Box>
         )}
 
+        {!locate && phase !== 'asking' && q.note && (
+          <Box
+            sx={{
+              position: 'absolute',
+              left: 8,
+              right: 8,
+              bottom: 'max(10px, env(safe-area-inset-bottom))',
+              py: 0.75,
+              px: 1.5,
+              background: 'rgba(249,243,227,.82)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+              border: `1px solid ${tokens.hairSoft}`,
+              borderRadius: '2px',
+              pointerEvents: 'none',
+            }}
+          >
+            <FlowNote question={q} />
+          </Box>
+        )}
+
         {locate && phase !== 'asking' && (
           <Box
             sx={{
@@ -506,6 +602,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
                   {wrongDetail ?? correctDetail}
                 </Typography>
               )}
+              {q.note && <FlowNote question={q} />}
             </Box>
             <Button variant="contained" autoFocus onClick={() => finishOrNext(answers)} sx={{ minHeight: 40, px: 2 }}>
               {nextLabel}
@@ -563,7 +660,7 @@ export default function Play({ world, config, onExit, onFinish }: Props) {
                 value={text}
                 readOnly={phase !== 'asking'}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setText(e.target.value)}
-                placeholder={q.kind === 'country' ? 'Nom du pays…' : 'Nom de la capitale…'}
+                placeholder={`Nom ${feminine ? 'de la' : 'du'} ${noun}…`}
                 autoFocus
                 autoComplete="off"
                 autoCorrect="off"

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import Box from '@mui/material/Box'
 import { geoArea, geoGraticule10, geoOrthographic, geoPath } from 'd3-geo'
 import type { MultiPolygon, Position } from 'geojson'
-import { REGIONS } from '../data/regions'
+import { isContinent, regionById } from '../data/regions'
 import type { RegionId } from '../data/types'
 import { COUNTRIES } from '../data/world'
 import type { WorldData } from '../data/world'
@@ -73,7 +73,7 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
 
   const { inScope, outScope } = useMemo(() => {
     const all = [...world.byId.keys()]
-    if (region === 'world') return { inScope: lightMulti(world, all), outScope: null }
+    if (!isContinent(region)) return { inScope: lightMulti(world, all), outScope: null }
     const inIds = new Set(COUNTRIES.filter((c) => c.region === region).map((c) => c.id))
     return {
       inScope: lightMulti(world, inIds),
@@ -100,8 +100,9 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
     const graticule = geoGraticule10()
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-    const box = REGIONS.find((r) => r.id === region)?.box
-    const focus = region === 'world' || !box ? null : { lon: (box[0] + box[2]) / 2, lat: (box[1] + box[3]) / 2 }
+    const box = regionById(region).box
+    const focus =
+      region === 'world' || region === 'planetary' ? null : { lon: (box[0] + box[2]) / 2, lat: (box[1] + box[3]) / 2 }
     const home = { lon: focus ? focus.lon : 20, lat: focus ? focus.lat : TILT_DEG }
     const st = view.current ?? { lon: home.lon, lat: home.lat, vlon: 0, vlat: 0, dragging: false, idleAt: 0 }
     view.current = st

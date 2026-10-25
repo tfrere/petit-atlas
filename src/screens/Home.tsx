@@ -4,13 +4,12 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
-import { REGIONS } from '../data/regions'
+import { regionById } from '../data/regions'
 import type { RegionId } from '../data/types'
-import { COUNTRIES } from '../data/world'
 import type { WorldData } from '../data/world'
 import { completion } from '../game/progress'
 import type { GameConfig } from '../game/records'
-import { poolFor } from '../game/targets'
+import { TARGETS, poolFor, validRegion } from '../game/targets'
 import type { PlayMode, TargetKind } from '../game/targets'
 import WorldMap from '../map/WorldMap'
 import { fontBody, tokens } from '../theme'
@@ -54,6 +53,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 const TARGET_OPTIONS: { value: TargetKind; label: string; hint?: string }[] = [
   { value: 'country', label: 'Pays' },
   { value: 'capital', label: 'Capitales' },
+  { value: 'current', label: 'Courants' },
+  { value: 'wind', label: 'Vents' },
 ]
 const MODE_OPTIONS: { value: PlayMode; label: string; hint?: string }[] = [
   { value: 'name', label: 'Je nomme', hint: 'la carte, j’écris' },
@@ -62,7 +63,7 @@ const MODE_OPTIONS: { value: PlayMode; label: string; hint?: string }[] = [
 const COUNTS = [10, 20, 0]
 
 export default function Home({ world, config, onChange, onPlay }: Props) {
-  const total = useMemo(() => poolFor(config.target, config.region, COUNTRIES).length, [config.target, config.region])
+  const total = useMemo(() => poolFor(config.target, config.region).length, [config.target, config.region])
   const effectiveCount = config.count === 0 || config.count >= total ? total : config.count
 
   const withProgress = <T extends TargetKind | PlayMode>(
@@ -78,6 +79,9 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
   const short = useMediaQuery('(max-height:700px)')
 
   const set = (patch: Partial<GameConfig>) => onChange({ ...config, ...patch })
+  const setTarget = (target: TargetKind) => set({ target, region: validRegion(target, config.region) })
+  const regions = TARGETS[config.target].regions.map(regionById)
+  const regionFont = regions.length === 4 ? '0.74rem' : regions.some((r) => r.label.length >= 11) ? '0.88rem' : '1rem'
 
   return (
     <Box
@@ -106,7 +110,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
           </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="overline" sx={{ color: tokens.brick, display: 'block', ...rise(60) }}>
-              Pays & capitales
+              Pays, mers & vents
             </Typography>
             <Typography
               variant="h1"
@@ -154,7 +158,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
           }}
         >
           <Typography variant="overline" sx={{ color: tokens.brick, ...rise(0) }}>
-            Géographie · pays & capitales
+            Géographie · pays, capitales, courants & vents
           </Typography>
           <Typography
             variant="h1"
@@ -171,7 +175,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             Le Petit Atlas
           </Typography>
           <Typography sx={{ mt: 1.5, maxWidth: '36ch', fontSize: '0.86rem', color: tokens.inkSoft, ...rise(160) }}>
-            Devine les pays et les capitales sur une carte d’atlas.
+            Devine les pays, les capitales, les courants marins et les vents sur une carte d’atlas.
           </Typography>
           <Box
             sx={{
@@ -219,7 +223,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
               label="Cible"
               value={config.target}
               options={withProgress(TARGET_OPTIONS, (t) => [t, config.mode])}
-              onChange={(v: TargetKind) => set({ target: v })}
+              onChange={setTarget}
             />
           </Section>
 
@@ -234,11 +238,15 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
 
           <Section title="Où">
             <Box
-              sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 0.75 }}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${regions.length === 4 ? 4 : 3}, minmax(0, 1fr))`,
+                gap: 0.75,
+              }}
               role="radiogroup"
               aria-label="Région"
             >
-              {REGIONS.map((r) => {
+              {regions.map((r) => {
                 const selected = r.id === config.region
                 return (
                   <Box
@@ -251,9 +259,9 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
                     sx={{
                       minHeight: 44,
                       [SHORT]: { minHeight: 38 },
-                      px: 1,
+                      px: regions.length === 4 ? 0.25 : 1,
                       fontFamily: fontBody,
-                      fontSize: '1rem',
+                      fontSize: regionFont,
                       fontWeight: selected ? 600 : 400,
                       color: selected ? tokens.brickDark : tokens.ink,
                       background: selected ? 'rgba(168,69,43,.09)' : 'transparent',

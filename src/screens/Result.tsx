@@ -4,6 +4,7 @@ import Chip from '@mui/material/Chip'
 import Typography from '@mui/material/Typography'
 import { formatTime } from '../game/records'
 import type { GameConfig, RecordEntry } from '../game/records'
+import { TARGETS } from '../game/targets'
 import { REGIONS } from '../data/regions'
 import { fontDisplay, tokens } from '../theme'
 import Cartouche from '../ui/Cartouche'
@@ -28,7 +29,7 @@ export default function Result({ game, onReplay, onMenu }: Props) {
   const { config, answers, score, ms, isRecord, previous } = game
   const missed = answers.filter((a) => !a.ok)
   const region = REGIONS.find((r) => r.id === config.region)?.label ?? ''
-  const what = config.target === 'country' ? 'Pays' : 'Capitales'
+  const what = TARGETS[config.target].label
   const how = config.mode === 'name' ? 'je nomme' : 'je situe'
 
   return (
@@ -110,7 +111,7 @@ export default function Result({ game, onReplay, onMenu }: Props) {
                   key={a.question.id}
                   variant="outlined"
                   label={
-                    a.question.kind === 'capital' ? `${a.question.label} · ${a.question.countryName}` : a.question.label
+                    a.question.kind === 'capital' ? `${a.question.label} · ${a.question.context}` : a.question.label
                   }
                   sx={{ borderColor: tokens.hair, color: tokens.ink, background: 'rgba(162,59,59,.07)' }}
                 />

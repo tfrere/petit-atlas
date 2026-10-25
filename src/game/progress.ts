@@ -1,5 +1,4 @@
-import { COUNTRIES } from '../data/world'
-import { TARGETS } from './targets'
+import { entriesOf } from './targets'
 import type { PlayMode, TargetKind } from './targets'
 
 const STORAGE_KEY = 'petit-atlas:progress:v1'
@@ -16,7 +15,7 @@ function readAll(): Store {
   }
 }
 
-/** Retient qu'un pays (ou sa capitale) a déjà été trouvé dans ce mode, toutes régions confondues. */
+/** Retient qu'un pays, une capitale, un courant ou un vent a déjà été trouvé dans ce mode, toutes régions confondues. */
 export function markFound(target: TargetKind, mode: PlayMode, id: string) {
   const all = readAll()
   const key = modeKey(target, mode)
@@ -37,7 +36,7 @@ export interface Completion {
 }
 
 export function completion(target: TargetKind, mode: PlayMode): Completion {
-  const eligible = new Set(COUNTRIES.filter(TARGETS[target].eligible).map((c) => c.id))
+  const eligible = new Set(entriesOf(target).map((e) => e.id))
   const found = (readAll()[modeKey(target, mode)] ?? []).filter((id) => eligible.has(id)).length
   const total = eligible.size
   return { found, total, percent: total ? Math.floor((found / total) * 100) : 0 }

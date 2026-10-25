@@ -8,8 +8,11 @@ Jeu de géographie au chrono, pensé pour le mobile, sur une carte façon vieil 
 |---|---|---|
 | **Pays** | Un pays est surligné sur la carte, tu écris son nom. | Un nom s'affiche, tu touches le pays pour le sélectionner, puis tu le retouches (ou « Sélectionner ») pour valider. |
 | **Capitales** | Un pays est surligné et sa capitale marquée d'une étoile, tu écris le nom de la capitale. | Un nom de capitale s'affiche, tu touches son emplacement, puis tu valides de la même façon (tolérance : 250 km). |
+| **Courants** | Un courant marin est tracé en flèches (rouge = chaud, bleu = froid), tu écris son nom (« Humboldt » suffit pour « Courant de Humboldt »). | Un nom de courant s'affiche, tu touches la mer où il passe. Le toucher est juste si ce courant est le plus proche de tous ceux de la série, à moins de 600 km de son tracé. |
+| **Vents** | Un vent est tracé en bande fléchée (alizés, mousson, mistral, chinook…), tu écris son nom. | Même principe que pour les courants. |
 
-- Régions : Monde, Europe, Afrique, Asie, Amériques, Océanie.
+- Régions : Monde, Europe, Afrique, Asie, Amériques, Océanie ; pour les courants : Monde, Atlantique, Pacifique, Indien ; pour les vents : Monde, Planétaires (alizés, vents d'ouest, moussons…), Europe, Afrique, Asie, Amériques.
+- Une fois la réponse donnée, un court mémo explique le courant ou le vent (chaud ou froid, d'où il vient, ce qu'il provoque).
 - La carte boucle horizontalement : on peut la faire défiler indéfiniment vers la gauche ou vers la droite (le Pacifique se prolonge sans coupure).
 - Séries de 10, 20 ou toutes les questions de la région.
 - Chaque question a un temps imparti (20 s en « je nomme », 15 s en « je situe »). Quand il s'écoule, la réponse est révélée ; que la réponse soit bonne ou non, le compte à rebours s'arrête jusqu'à ce que le joueur passe à la suite (bouton « Suivant », touche Entrée ou un tap n'importe où sur la carte).
@@ -32,6 +35,10 @@ Générées par `npm run data` (`scripts/build-data.mjs`) puis versionnées :
 - **Pays** : [mledoze/countries](https://github.com/mledoze/countries) (ISO 3166-1, noms français, régions) — 194 États souverains.
 - **Capitales** (nom français + coordonnées) : [Wikidata](https://www.wikidata.org) (propriété P36), avec une capitale principale choisie quand un pays en a plusieurs (Bolivie, Afrique du Sud…) ; les autres restent acceptées.
 - **Géométries** : [Natural Earth](https://www.naturalearthdata.com) 1:50m via [world-atlas](https://github.com/topojson/world-atlas) (domaine public). Somaliland, Chypre du Nord et Siachen sont rattachés à leur pays.
+
+### Courants et vents
+
+Il s'agit d'un jeu de **noms** : les tracés de `src/data/flows.ts` (33 courants, 27 vents) sont **schématiques**, redessinés à la main d'après des cartes d'atlas (points de contrôle `[lon, lat]`, lissés par une spline de Catmull-Rom au chargement), pas issus de mesures. Les noms sont en français, avec des variantes (« Kuro-Shivo », « Westerlies »…), et chaque fiche a un mémo d'une phrase. Une longitude peut dépasser ±180° pour franchir l'antiméridien (Pacifique). La couleur « chaud / froid » est omise quand elle change avec la saison (courant de Somalie).
 
 Les États trop petits pour être touchés au doigt reçoivent une pastille tactile en mode « je situe ». Tuvalu n'a pas de polygone à cette échelle : il est représenté par sa pastille.
 
@@ -69,4 +76,4 @@ Le script construit le projet, ajoute l'en-tête de Space (`hf/README.md`) et en
 - vent de surface : NCEP/NCAR Reanalysis (NOAA PSL), moyennes mensuelles de long terme, 2,5° ;
 - courants de surface : SODA 3.3.1 (niveau ~5 m, moyennes mensuelles 2006-2015), ramenés à 1°, via NOAA CoastWatch ERDDAP.
 
-Ces fichiers ne sont pas encore utilisés par l'application.
+Ces fichiers ne sont pas utilisés par l'application : ils ont servi à l'étude et pourraient animer des particules en arrière-plan plus tard. Le jeu repose sur les tracés schématiques ci-dessus.

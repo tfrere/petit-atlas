@@ -33,3 +33,17 @@ describe('progression', () => {
     expect(c.found).toBe(1)
   })
 })
+
+describe('progression des courants et des vents', () => {
+  it('compte les courants et les vents trouvés, séparément', () => {
+    markFound('current', 'name', 'humboldt')
+    markFound('current', 'name', 'humboldt')
+    markFound('current', 'locate', 'kuroshio')
+    markFound('wind', 'name', 'mistral')
+    markFound('wind', 'name', 'inconnu')
+    expect(completion('current', 'name').found).toBe(1)
+    expect(completion('current', 'locate').found).toBe(1)
+    expect(completion('wind', 'name').found).toBe(1)
+    expect(completion('current', 'name').total).toBeGreaterThanOrEqual(30)
+  })
+})
