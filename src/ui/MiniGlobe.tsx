@@ -18,37 +18,43 @@ const SPIN_DEG_PER_S = 11
 const TILT_DEG = 16
 const MIN_SEGMENT_DEG = 0.6
 const MIN_ISLAND_DEG = 0.9
+/** Au-delà de ce diamètre (px), on garde un tracé plus fin. */
+const LARGE_PX = 240
+const FINE_SEGMENT_DEG = 0.12
+const FINE_ISLAND_DEG = 0.3
 const MAX_LAT = 80
 const COAST_MS = 450
 const RETURN_DELAY_MS = 1400
 const IDLE_FRAME_MS = 30
 
-function simplifyRing(ring: Position[]): Position[] {
+function simplifyRing(ring: Position[], step: number): Position[] {
   const out = [ring[0]]
   for (let i = 1; i < ring.length - 1; i++) {
     const prev = out[out.length - 1]
-    if (Math.abs(ring[i][0] - prev[0]) + Math.abs(ring[i][1] - prev[1]) >= MIN_SEGMENT_DEG) out.push(ring[i])
+    if (Math.abs(ring[i][0] - prev[0]) + Math.abs(ring[i][1] - prev[1]) >= step) out.push(ring[i])
   }
   out.push(ring[ring.length - 1])
   return out.length >= 4 ? out : ring
 }
 
-function isTiny(ring: Position[]) {
+function isTiny(ring: Position[], min: number) {
   const xs = ring.map((p) => p[0])
   const ys = ring.map((p) => p[1])
-  return Math.max(...xs) - Math.min(...xs) < MIN_ISLAND_DEG && Math.max(...ys) - Math.min(...ys) < MIN_ISLAND_DEG
+  return Math.max(...xs) - Math.min(...xs) < min && Math.max(...ys) - Math.min(...ys) < min
 }
 
 /** Géométrie allégée : à 100 px de diamètre, le détail du 1:50m ne se voit pas mais coûte cher à chaque image. */
-function lightMulti(world: WorldData, ids: Iterable<string>): MultiPolygon {
+function lightMulti(world: WorldData, ids: Iterable<string>, fine: boolean): MultiPolygon {
+  const step = fine ? FINE_SEGMENT_DEG : MIN_SEGMENT_DEG
+  const minIsland = fine ? FINE_ISLAND_DEG : MIN_ISLAND_DEG
   const coordinates: Position[][][] = []
   for (const id of ids) {
     const shape = world.byId.get(id)
     if (!shape) continue
     const g = shape.feature.geometry
     for (const poly of g.type === 'Polygon' ? [g.coordinates] : g.coordinates) {
-      if (isTiny(poly[0])) continue
-      const light = poly.map(simplifyRing)
+      if (isTiny(poly[0], minIsland)) continue
+      const light = poly.map((ring) => simplifyRing(ring, step))
       const flipped =
         geoArea({ type: 'Polygon', coordinates: light }) > 2 !== geoArea({ type: 'Polygon', coordinates: poly }) > 2
       coordinates.push(flipped ? poly : light)
@@ -71,18 +77,20 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
     idleAt: number
   } | null>(null)
 
+  const fine = size >= LARGE_PX
   const { inScope, outScope } = useMemo(() => {
     const all = [...world.byId.keys()]
-    if (!isContinent(region)) return { inScope: lightMulti(world, all), outScope: null }
+    if (!isContinent(region)) return { inScope: lightMulti(world, all, fine), outScope: null }
     const inIds = new Set(COUNTRIES.filter((c) => c.region === region).map((c) => c.id))
     return {
-      inScope: lightMulti(world, inIds),
+      inScope: lightMulti(world, inIds, fine),
       outScope: lightMulti(
         world,
         all.filter((id) => !inIds.has(id)),
+        fine,
       ),
     }
-  }, [world, region])
+  }, [world, region, fine])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -123,7 +131,7 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
       ctx.beginPath()
       path(graticule)
       ctx.strokeStyle = 'rgba(46,36,24,.2)'
-      ctx.lineWidth = 0.5
+      ctx.lineWidth = fine ? 0.7 : 0.5
       ctx.stroke()
 
       if (outScope) {
@@ -139,7 +147,7 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
       ctx.fillStyle = tokens.land
       ctx.fill()
       ctx.strokeStyle = 'rgba(86,68,46,.7)'
-      ctx.lineWidth = 0.4
+      ctx.lineWidth = fine ? 0.6 : 0.4
       ctx.stroke()
 
       const limb = ctx.createRadialGradient(c - radius * 0.25, c - radius * 0.3, radius * 0.55, c, c, radius)
@@ -154,7 +162,7 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
       ctx.beginPath()
       path({ type: 'Sphere' })
       ctx.strokeStyle = tokens.ink
-      ctx.lineWidth = 1.1
+      ctx.lineWidth = fine ? 1.6 : 1.1
       ctx.stroke()
     }
 
@@ -280,7 +288,7 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
       canvas.removeEventListener('pointerup', onUp)
       canvas.removeEventListener('pointercancel', onUp)
     }
-  }, [inScope, outScope, region, size])
+  }, [inScope, outScope, region, size, fine])
 
   return (
     <Box

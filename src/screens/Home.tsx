@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { keyframes } from '@emotion/react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -11,7 +11,6 @@ import { completion } from '../game/progress'
 import type { GameConfig } from '../game/records'
 import { TARGETS, poolFor, validRegion } from '../game/targets'
 import type { PlayMode, TargetKind } from '../game/targets'
-import WorldMap from '../map/WorldMap'
 import { fontBody, tokens } from '../theme'
 import MiniGlobe from '../ui/MiniGlobe'
 import Segmented from '../ui/Segmented'
@@ -32,6 +31,41 @@ interface Props {
   config: GameConfig
   onChange: (c: GameConfig) => void
   onPlay: () => void
+}
+
+const GLOBE_MAX_PX = 680
+
+/** Globe du hero (grands écrans) : prend toute la place restante sous le titre. */
+function GlobeStage({ world, region }: { world: WorldData; region: RegionId }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState(0)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const measure = () => setSize(Math.max(0, Math.min(GLOBE_MAX_PX, el.clientWidth, el.clientHeight) - 24))
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return (
+    <Box
+      ref={ref}
+      sx={{
+        mt: { xs: 2, md: 2 },
+        width: '100%',
+        maxWidth: 720,
+        flex: { md: 1 },
+        minHeight: { xs: 320, md: 0 },
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...rise(240, 1100),
+      }}
+    >
+      {size > 40 && <MiniGlobe world={world} region={region} size={size} />}
+    </Box>
+  )
 }
 
 const SHORT = '@media (max-height: 700px) and (max-width: 899.95px)'
@@ -150,8 +184,8 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
             justifyContent: { md: 'center' },
             textAlign: 'center',
             px: { xs: 2, md: 6 },
-            pt: { xs: 'max(22px, env(safe-area-inset-top))', md: 0 },
-            pb: { xs: 1.5, md: 0 },
+            pt: { xs: 'max(22px, env(safe-area-inset-top))', md: 4 },
+            pb: { xs: 1.5, md: 3 },
             background: {
               md: 'radial-gradient(ellipse 75% 55% at 50% 52%, rgba(255,252,243,.85), rgba(243,234,212,0) 72%)',
             },
@@ -177,20 +211,7 @@ export default function Home({ world, config, onChange, onPlay }: Props) {
           <Typography sx={{ mt: 1.5, maxWidth: '36ch', fontSize: '0.86rem', color: tokens.inkSoft, ...rise(160) }}>
             Devine les pays, les capitales, les courants marins et les vents sur une carte d’atlas.
           </Typography>
-          <Box
-            sx={{
-              mt: { xs: 3, md: 5.5 },
-              width: {
-                xs: '100%',
-                md: 'min(100%, 900px, calc((var(--app-h, 100dvh) - 360px) * 2.06))',
-              },
-              aspectRatio: '2.06 / 1',
-              filter: 'drop-shadow(0 30px 28px rgba(58,46,32,.2)) drop-shadow(0 4px 5px rgba(58,46,32,.14))',
-              ...rise(240, 1100),
-            }}
-          >
-            <WorldMap world={world} region={config.region} interactive={false} vignette={false} still sheen />
-          </Box>
+          <GlobeStage world={world} region={config.region} />
         </Box>
       )}
 
