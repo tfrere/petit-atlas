@@ -49,12 +49,28 @@ function useBox(ref: React.RefObject<HTMLElement | null>) {
 /** Couronne graduée autour du globe, comme le limbe d'un instrument de navigation. */
 function Bezel({ size }: { size: number }) {
   const ticks = useMemo(() => Array.from({ length: 72 }, (_, i) => i * 5), [])
+  const cardinals = [
+    { a: 0, t: 'N' },
+    { a: 90, t: 'E' },
+    { a: 180, t: 'S' },
+    { a: 270, t: 'O' },
+  ]
+  const span = size * 1.2
   return (
     <Box
       component="svg"
-      viewBox="-100 -100 200 200"
+      viewBox="-120 -120 240 240"
       aria-hidden
-      sx={{ position: 'absolute', inset: 0, width: size, height: size, color: tokens.ink, pointerEvents: 'none' }}
+      sx={{
+        position: 'absolute',
+        left: (size - span) / 2,
+        top: (size - span) / 2,
+        width: span,
+        height: span,
+        color: tokens.ink,
+        pointerEvents: 'none',
+        overflow: 'visible',
+      }}
     >
       <circle r="97" fill="none" stroke="currentColor" strokeOpacity=".5" strokeWidth=".35" />
       <circle r="91.5" fill="none" stroke="currentColor" strokeOpacity=".28" strokeWidth=".3" strokeDasharray="1 2.4" />
@@ -72,7 +88,78 @@ function Bezel({ size }: { size: number }) {
           />
         )
       })}
-      <path d="M0,-103.5 L1.6,-98.5 L-1.6,-98.5 Z" fill="currentColor" fillOpacity=".7" />
+      {cardinals.map(({ a, t }) => (
+        <g key={t} transform={`rotate(${a})`}>
+          <text
+            y="-104"
+            textAnchor="middle"
+            fontSize="9"
+            fontStyle="italic"
+            fontFamily={fontDisplay}
+            fill={a === 0 ? tokens.brick : 'currentColor'}
+            fillOpacity={a === 0 ? 1 : 0.7}
+            transform={`rotate(${-a} 0 -104)`}
+          >
+            {t}
+          </text>
+        </g>
+      ))}
+    </Box>
+  )
+}
+
+/** Lignes de rhumb rayonnant depuis le globe, comme sur une carte portulan. */
+function Rhumbs({ w, h, cx, cy, ring }: { w: number; h: number; cx: number; cy: number; ring: number }) {
+  const long = Math.hypot(w, h)
+  const roses = [
+    { x: cx, y: cy, n: 32, o: 0.2 },
+    { x: cx - ring * 0.95, y: cy - ring * 0.62, n: 16, o: 0.11 },
+  ]
+  return (
+    <Box
+      component="svg"
+      width={w}
+      height={h}
+      aria-hidden
+      sx={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        color: tokens.brick,
+        maskImage: 'linear-gradient(100deg, transparent 12%, #000 52%)',
+        WebkitMaskImage: 'linear-gradient(100deg, transparent 12%, #000 52%)',
+      }}
+    >
+      {roses.map((r, k) =>
+        Array.from({ length: r.n }, (_, i) => {
+          const a = (i * 2 * Math.PI) / r.n
+          return (
+            <line
+              key={`${k}-${i}`}
+              x1={r.x}
+              y1={r.y}
+              x2={r.x + Math.cos(a) * long}
+              y2={r.y + Math.sin(a) * long}
+              stroke="currentColor"
+              strokeOpacity={r.o}
+              strokeWidth={i % 4 === 0 ? 0.8 : 0.5}
+            />
+          )
+        }),
+      )}
+      {[0.66, 0.78].map((f) => (
+        <circle
+          key={f}
+          cx={cx}
+          cy={cy}
+          r={(ring / 2) * (1 + f)}
+          fill="none"
+          stroke="currentColor"
+          strokeOpacity=".16"
+          strokeWidth=".6"
+          strokeDasharray="2 5"
+        />
+      ))}
     </Box>
   )
 }
@@ -200,78 +287,130 @@ interface Props {
   region: RegionId
 }
 
-/** Hero des grands écrans : titre en haut à gauche, globe monumental qui déborde du bas à droite. */
+const SUMMARY_H = 214
+const COMPASS_W = 92 + 20 + 112
+
+/** Distance d'un point à un rectangle (0 s'il est dedans). */
+const distToRect = (px: number, py: number, r: { x: number; y: number; w: number; h: number }) =>
+  Math.hypot(Math.max(r.x - px, 0, px - (r.x + r.w)), Math.max(r.y - py, 0, py - (r.y + r.h)))
+
+/** Hero des grands écrans : planche d'atlas, titre à gauche, globe entier posé dans le coin opposé. */
 export default function DesktopHero({ world, region }: Props) {
   const ref = useRef<HTMLDivElement>(null)
+  const headRef = useRef<HTMLDivElement>(null)
   const { w, h } = useBox(ref)
+  const head = useBox(headRef)
   const stats = useMemo(() => STATS.map((s) => ({ ...s, n: entriesOf(s.kind).length })), [])
 
   const sideBySide = w >= 780
-  const textW = Math.min(480, Math.max(320, w * 0.4))
   const padLeft = Math.min(88, Math.max(36, w * 0.052))
-  const ringFree = sideBySide ? Math.min(h * 0.94, (w - textW) * 1.1, 880) : Math.min(w * 1.02, h * 0.62, 760)
-  const ringBesideIndex = (w - padLeft - SUMMARY_W - 28) / 0.92
-  const showSummary = sideBySide && h >= 640 && Math.min(ringFree, ringBesideIndex) >= Math.min(h * 0.72, 560)
-  const ring = showSummary ? Math.min(ringFree, ringBesideIndex) : ringFree
+  const padTop = Math.min(64, Math.max(28, h * 0.065))
+  const compassOn = sideBySide && h >= 560
+  const margin = FRAME + 22
+
+  // Plus grand globe qui ne touche ni le titre, ni le sommaire, ni la boussole.
+  const fit = (withSummary: boolean) => {
+    const rects = [{ x: padLeft, y: padTop, w: head.w, h: head.h + (withSummary ? SUMMARY_H : 0) }]
+    if (compassOn) rects.push({ x: padLeft, y: h - 52 - 92, w: COMPASS_W, h: 92 })
+    for (let ring = Math.min((h - 2 * margin) / 1.12, 900); ring >= 300; ring -= 6) {
+      const cx = w - margin - ring * 0.56
+      const cy = h - margin - ring * 0.56
+      const reach = ring * 0.56 + 14
+      if (rects.every((r) => distToRect(cx, cy, r) > reach)) return ring
+    }
+    return 300
+  }
+  const ringSummary = sideBySide && h >= 640 ? fit(true) : 0
+  const showSummary = ringSummary >= Math.min(h * 0.66, 560)
+  const ring = sideBySide ? (showSummary ? ringSummary : fit(false)) : Math.min(w * 0.96, h * 0.62, 720)
   const globe = Math.max(0, ring / 1.17)
-  const cx = sideBySide ? w - ring / 2 + ring * 0.08 : w / 2
-  const cy = h - ring / 2 + ring * 0.1
+  const cx = sideBySide ? w - margin - ring * 0.56 : w / 2
+  const cy = sideBySide ? h - margin - ring * 0.56 : h - ring / 2 + ring * 0.08
+
   return (
     <Box ref={ref} sx={{ position: 'relative', height: '100%', overflow: 'hidden' }}>
       <Box
         sx={{
           position: 'absolute',
           inset: 0,
-          background:
-            'radial-gradient(ellipse 70% 60% at 62% 62%, rgba(255,252,243,.9), rgba(243,234,212,0) 70%), linear-gradient(rgba(58,46,32,.045) 1px, transparent 1px) 0 0 / 100% 56px',
+          background: `radial-gradient(circle at ${cx}px ${cy}px, rgba(255,252,243,.95), rgba(243,234,212,0) ${Math.round(ring * 0.78)}px), linear-gradient(rgba(58,46,32,.04) 1px, transparent 1px) 0 0 / 100% 56px`,
           pointerEvents: 'none',
         }}
       />
 
+      <Box sx={{ position: 'absolute', inset: 0, clipPath: `inset(${FRAME}px)` }}>
+        {w > 0 && <Rhumbs w={w} h={h} cx={cx} cy={cy} ring={ring} />}
+        {globe > 120 && (
+          <Box
+            sx={{
+              position: 'absolute',
+              left: cx - ring / 2,
+              top: cy - ring / 2,
+              width: ring,
+              height: ring,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              animation: `${fadeIn} 1100ms cubic-bezier(.2,.7,.2,1) 200ms backwards`,
+              '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+            }}
+          >
+            <Bezel size={ring} />
+            <MiniGlobe world={world} region={region} size={Math.round(globe)} />
+          </Box>
+        )}
+      </Box>
+
+      <Neatline inset={FRAME} />
+
       <Box
         sx={{
           position: 'absolute',
-          left: 'clamp(36px, 5.2vw, 88px)',
-          top: 'clamp(28px, 6.5vh, 64px)',
+          left: padLeft,
+          top: padTop,
           zIndex: 1,
-          maxWidth: sideBySide ? textW : '88%',
+          maxWidth: sideBySide ? 'min(480px, 46%)' : '88%',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, ...rise(0) }}>
-          <Box sx={{ width: 36, height: '1px', background: tokens.brick }} />
-          <Typography variant="overline" sx={{ color: tokens.brick }}>
-            Atlas de poche
+        <Box ref={headRef} sx={{ width: 'fit-content', maxWidth: '100%' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, ...rise(0) }}>
+            <Box sx={{ width: 36, height: '1px', background: tokens.brick }} />
+            <Typography variant="overline" sx={{ color: tokens.brick }}>
+              Atlas de poche
+            </Typography>
+          </Box>
+          <Typography
+            variant="h1"
+            sx={{
+              mt: 1.25,
+              fontSize: 'clamp(3.4rem, min(7.4vw, 12.5vh), 7.4rem)',
+              lineHeight: 0.92,
+              letterSpacing: '-0.025em',
+              fontStyle: 'italic',
+              fontWeight: 500,
+              ...rise(80),
+            }}
+          >
+            Le Petit
+            <Box component="span" sx={{ display: 'block', pl: '0.9em', fontFamily: fontDisplay }}>
+              Atlas
+            </Box>
+          </Typography>
+          <Typography
+            sx={{
+              mt: 2,
+              maxWidth: '24ch',
+              fontFamily: fontDisplay,
+              fontStyle: 'italic',
+              fontSize: 'clamp(1.2rem, 2.1vh, 1.5rem)',
+              lineHeight: 1.3,
+              color: tokens.inkSoft,
+              ...rise(180),
+            }}
+          >
+            Pays, capitales, courants et vents, sur une carte d’atlas.
           </Typography>
         </Box>
-        <Typography
-          variant="h1"
-          sx={{
-            mt: 1.25,
-            fontSize: 'clamp(3.4rem, min(7.4vw, 12.5vh), 7.4rem)',
-            lineHeight: 0.92,
-            letterSpacing: '-0.025em',
-            fontStyle: 'italic',
-            fontWeight: 500,
-            ...rise(80),
-          }}
-        >
-          Le Petit
-          <Box component="span" sx={{ display: 'block', pl: '0.9em', fontFamily: fontDisplay }}>
-            Atlas
-          </Box>
-        </Typography>
-        <Typography
-          sx={{
-            mt: 2.25,
-            maxWidth: '34ch',
-            fontSize: '0.92rem',
-            lineHeight: 1.55,
-            color: tokens.inkSoft,
-            ...rise(180),
-          }}
-        >
-          Devine les pays, les capitales, les courants marins et les vents sur une carte d’atlas.
-        </Typography>
         {showSummary && (
           <Box sx={{ mt: 3.5, width: SUMMARY_W, ...rise(260) }}>
             <Typography variant="overline" sx={{ color: tokens.brick, display: 'block', mb: 0.5 }}>
@@ -325,36 +464,12 @@ export default function DesktopHero({ world, region }: Props) {
         )}
       </Box>
 
-      <Box sx={{ position: 'absolute', inset: 0, clipPath: `inset(${FRAME}px)` }}>
-        {globe > 120 && (
-          <Box
-            sx={{
-              position: 'absolute',
-              left: cx - ring / 2,
-              top: cy - ring / 2,
-              width: ring,
-              height: ring,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              animation: `${fadeIn} 1100ms cubic-bezier(.2,.7,.2,1) 200ms backwards`,
-              '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
-            }}
-          >
-            <Bezel size={ring} />
-            <MiniGlobe world={world} region={region} size={Math.round(globe)} />
-          </Box>
-        )}
-      </Box>
-
-      <Neatline inset={FRAME} />
-
-      {sideBySide && h >= 560 && (
+      {compassOn && (
         <Box
           sx={{
             position: 'absolute',
-            left: 'clamp(36px, 5.2vw, 88px)',
-            bottom: 'clamp(30px, 5vh, 52px)',
+            left: padLeft,
+            bottom: 52,
             display: 'flex',
             alignItems: 'center',
             gap: 2.5,

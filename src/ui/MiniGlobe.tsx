@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import Box from '@mui/material/Box'
-import { geoArea, geoCentroid, geoDistance, geoGraticule, geoOrthographic, geoPath } from 'd3-geo'
+import { geoArea, geoCentroid, geoDistance, geoOrthographic, geoPath } from 'd3-geo'
 import type { MultiPolygon, Position } from 'geojson'
 import { isContinent, regionById } from '../data/regions'
 import type { RegionId } from '../data/types'
@@ -28,6 +28,22 @@ const MAX_LAT = 80
 const COAST_MS = 450
 const RETURN_DELAY_MS = 1400
 const IDLE_FRAME_MS = 30
+
+/** Méridiens et parallèles échantillonnés finement : sans rééchantillonnage de la projection, ils restent courbes. */
+function makeGraticule(stepDeg: number, sampleDeg = 2): GeoJSON.MultiLineString {
+  const lines: Position[][] = []
+  for (let lon = -180; lon < 180; lon += stepDeg) {
+    const line: Position[] = []
+    for (let lat = -90; lat <= 90; lat += sampleDeg) line.push([lon, lat])
+    lines.push(line)
+  }
+  for (let lat = -90 + stepDeg; lat < 90; lat += stepDeg) {
+    const line: Position[] = []
+    for (let lon = -180; lon <= 180; lon += sampleDeg) line.push([lon, lat])
+    lines.push(line)
+  }
+  return { type: 'MultiLineString', coordinates: lines }
+}
 
 function simplifyRing(ring: Position[], step: number): Position[] {
   const out = [ring[0]]
@@ -170,7 +186,7 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
       .clipAngle(90)
       .precision(fine ? 0 : 0.8)
     const path = geoPath(projection, ctx)
-    const graticule = geoGraticule().step(fine ? [15, 15] : [10, 10])()
+    const graticule = makeGraticule(fine ? 15 : 10)
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
     const box = regionById(region).box
