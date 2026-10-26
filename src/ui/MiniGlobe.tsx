@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import Box from '@mui/material/Box'
-import { geoArea, geoGraticule10, geoOrthographic, geoPath } from 'd3-geo'
+import { geoArea, geoCentroid, geoDistance, geoGraticule, geoOrthographic, geoPath } from 'd3-geo'
 import type { MultiPolygon, Position } from 'geojson'
 import { isContinent, regionById } from '../data/regions'
 import type { RegionId } from '../data/types'
@@ -20,8 +20,10 @@ const MIN_SEGMENT_DEG = 0.6
 const MIN_ISLAND_DEG = 0.9
 /** Au-delà de ce diamètre (px), on garde un tracé plus fin. */
 const LARGE_PX = 240
-const FINE_SEGMENT_DEG = 0.12
-const FINE_ISLAND_DEG = 0.3
+const FINE_SEGMENT_DEG = 0.3
+const FINE_TOLERANCE_DEG = 0.25
+const FINE_ISLAND_DEG = 0.4
+const FINE_IDLE_FRAME_MS = 40
 const MAX_LAT = 80
 const COAST_MS = 450
 const RETURN_DELAY_MS = 1400
@@ -37,30 +39,89 @@ function simplifyRing(ring: Position[], step: number): Position[] {
   return out.length >= 4 ? out : ring
 }
 
+/** Douglas-Peucker : ne garde que les sommets qui écartent le tracé de plus de `tol` degrés. */
+function douglasPeucker(ring: Position[], tol: number): Position[] {
+  const keep = new Uint8Array(ring.length)
+  let split = 0
+  let splitD = 0
+  for (let i = 1; i < ring.length - 1; i++) {
+    const d = Math.hypot(ring[i][0] - ring[0][0], ring[i][1] - ring[0][1])
+    if (d > splitD) {
+      split = i
+      splitD = d
+    }
+  }
+  if (!split) return ring
+  keep[0] = 1
+  keep[split] = 1
+  keep[ring.length - 1] = 1
+  const stack: [number, number][] = [
+    [0, split],
+    [split, ring.length - 1],
+  ]
+  while (stack.length) {
+    const [a, b] = stack.pop()!
+    const [ax, ay] = ring[a]
+    const dx = ring[b][0] - ax
+    const dy = ring[b][1] - ay
+    const len = Math.hypot(dx, dy) || 1e-9
+    let far = -1
+    let farD = tol
+    for (let i = a + 1; i < b; i++) {
+      const d = Math.abs((ring[i][0] - ax) * dy - (ring[i][1] - ay) * dx) / len
+      if (d > farD) {
+        far = i
+        farD = d
+      }
+    }
+    if (far > 0) {
+      keep[far] = 1
+      stack.push([a, far], [far, b])
+    }
+  }
+  const out = ring.filter((_, i) => keep[i])
+  return out.length >= 4 ? out : ring
+}
+
 function isTiny(ring: Position[], min: number) {
   const xs = ring.map((p) => p[0])
   const ys = ring.map((p) => p[1])
   return Math.max(...xs) - Math.min(...xs) < min && Math.max(...ys) - Math.min(...ys) < min
 }
 
-/** Géométrie allégée : à 100 px de diamètre, le détail du 1:50m ne se voit pas mais coûte cher à chaque image. */
-function lightMulti(world: WorldData, ids: Iterable<string>, fine: boolean): MultiPolygon {
+interface Part {
+  geometry: MultiPolygon
+  center: [number, number]
+  /** Rayon angulaire (radians) du pays autour de son centre : sert à ignorer les pays de l'autre face. */
+  radius: number
+}
+
+/** Géométrie allégée, pays par pays : à 100 px de diamètre, le détail du 1:50m ne se voit pas mais coûte cher à chaque image. */
+function lightParts(world: WorldData, ids: Iterable<string>, fine: boolean): Part[] {
   const step = fine ? FINE_SEGMENT_DEG : MIN_SEGMENT_DEG
   const minIsland = fine ? FINE_ISLAND_DEG : MIN_ISLAND_DEG
-  const coordinates: Position[][][] = []
+  const parts: Part[] = []
   for (const id of ids) {
     const shape = world.byId.get(id)
     if (!shape) continue
     const g = shape.feature.geometry
+    const coordinates: Position[][][] = []
     for (const poly of g.type === 'Polygon' ? [g.coordinates] : g.coordinates) {
       if (isTiny(poly[0], minIsland)) continue
-      const light = poly.map((ring) => simplifyRing(ring, step))
+      const light = poly.map((ring) => (fine ? douglasPeucker(ring, FINE_TOLERANCE_DEG) : simplifyRing(ring, step)))
       const flipped =
         geoArea({ type: 'Polygon', coordinates: light }) > 2 !== geoArea({ type: 'Polygon', coordinates: poly }) > 2
       coordinates.push(flipped ? poly : light)
     }
+    if (!coordinates.length) continue
+    const geometry: MultiPolygon = { type: 'MultiPolygon', coordinates }
+    const center = geoCentroid(geometry)
+    let radius = 0
+    for (const poly of coordinates)
+      for (const pt of poly[0]) radius = Math.max(radius, geoDistance(center, pt as [number, number]))
+    parts.push({ geometry, center, radius })
   }
-  return { type: 'MultiPolygon', coordinates }
+  return parts
 }
 
 const angleDelta = (from: number, to: number) => ((((to - from) % 360) + 540) % 360) - 180
@@ -80,11 +141,11 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
   const fine = size >= LARGE_PX
   const { inScope, outScope } = useMemo(() => {
     const all = [...world.byId.keys()]
-    if (!isContinent(region)) return { inScope: lightMulti(world, all, fine), outScope: null }
+    if (!isContinent(region)) return { inScope: lightParts(world, all, fine), outScope: null }
     const inIds = new Set(COUNTRIES.filter((c) => c.region === region).map((c) => c.id))
     return {
-      inScope: lightMulti(world, inIds, fine),
-      outScope: lightMulti(
+      inScope: lightParts(world, inIds, fine),
+      outScope: lightParts(
         world,
         all.filter((id) => !inIds.has(id)),
         fine,
@@ -103,9 +164,13 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
 
     const radius = size / 2 - 3
     const c = size / 2
-    const projection = geoOrthographic().translate([c, c]).scale(radius).clipAngle(90).precision(0.8)
+    const projection = geoOrthographic()
+      .translate([c, c])
+      .scale(radius)
+      .clipAngle(90)
+      .precision(fine ? 0 : 0.8)
     const path = geoPath(projection, ctx)
-    const graticule = geoGraticule10()
+    const graticule = geoGraticule().step(fine ? [15, 15] : [10, 10])()
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
     const box = regionById(region).box
@@ -116,17 +181,49 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
     view.current = st
     st.dragging = false
 
+    const layer = (paint: (g: CanvasRenderingContext2D) => void) => {
+      const cv = document.createElement('canvas')
+      cv.width = size * dpr
+      cv.height = size * dpr
+      const g = cv.getContext('2d')
+      if (g) {
+        g.setTransform(dpr, 0, 0, dpr, 0, 0)
+        paint(g)
+      }
+      return cv
+    }
+    const disc = new Path2D()
+    disc.arc(c, c, radius, 0, Math.PI * 2)
+    const oceanLayer = layer((g) => {
+      const grad = g.createRadialGradient(c - radius * 0.3, c - radius * 0.38, radius * 0.1, c, c, radius)
+      grad.addColorStop(0, '#c4dacf')
+      grad.addColorStop(1, '#93b2a4')
+      g.fillStyle = grad
+      g.fill(disc)
+    })
+    const limbLayer = layer((g) => {
+      const grad = g.createRadialGradient(c - radius * 0.25, c - radius * 0.3, radius * 0.55, c, c, radius)
+      grad.addColorStop(0, 'rgba(255,255,255,.16)')
+      grad.addColorStop(0.55, 'rgba(255,255,255,0)')
+      grad.addColorStop(1, 'rgba(58,46,32,.24)')
+      g.fillStyle = grad
+      g.fill(disc)
+      g.strokeStyle = tokens.ink
+      g.lineWidth = fine ? 1.6 : 1.1
+      g.stroke(disc)
+    })
+
+    const HALF_PI = Math.PI / 2
+    const facing = (parts: Part[]) => {
+      const here: [number, number] = [st.lon, st.lat]
+      ctx.beginPath()
+      for (const p of parts) if (geoDistance(p.center, here) < HALF_PI + p.radius) path(p.geometry)
+    }
+
     const draw = () => {
       projection.rotate([-st.lon, -st.lat])
       ctx.clearRect(0, 0, size, size)
-
-      const ocean = ctx.createRadialGradient(c - radius * 0.3, c - radius * 0.38, radius * 0.1, c, c, radius)
-      ocean.addColorStop(0, '#c4dacf')
-      ocean.addColorStop(1, '#93b2a4')
-      ctx.beginPath()
-      path({ type: 'Sphere' })
-      ctx.fillStyle = ocean
-      ctx.fill()
+      ctx.drawImage(oceanLayer, 0, 0, size, size)
 
       ctx.beginPath()
       path(graticule)
@@ -135,35 +232,20 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
       ctx.stroke()
 
       if (outScope) {
-        ctx.beginPath()
-        path(outScope)
+        facing(outScope)
         ctx.fillStyle = tokens.dim
         ctx.globalAlpha = 0.85
         ctx.fill()
         ctx.globalAlpha = 1
       }
-      ctx.beginPath()
-      path(inScope)
+      facing(inScope)
       ctx.fillStyle = tokens.land
       ctx.fill()
       ctx.strokeStyle = 'rgba(86,68,46,.7)'
       ctx.lineWidth = fine ? 0.6 : 0.4
       ctx.stroke()
 
-      const limb = ctx.createRadialGradient(c - radius * 0.25, c - radius * 0.3, radius * 0.55, c, c, radius)
-      limb.addColorStop(0, 'rgba(255,255,255,.16)')
-      limb.addColorStop(0.55, 'rgba(255,255,255,0)')
-      limb.addColorStop(1, 'rgba(58,46,32,.24)')
-      ctx.beginPath()
-      path({ type: 'Sphere' })
-      ctx.fillStyle = limb
-      ctx.fill()
-
-      ctx.beginPath()
-      path({ type: 'Sphere' })
-      ctx.strokeStyle = tokens.ink
-      ctx.lineWidth = fine ? 1.6 : 1.1
-      ctx.stroke()
+      ctx.drawImage(limbLayer, 0, 0, size, size)
     }
 
     let raf = 0
@@ -182,7 +264,7 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
     const frame = (now: number) => {
       raf = 0
       const interacting = st.dragging || coasting()
-      if (!interacting && now - drawn < IDLE_FRAME_MS) {
+      if (!interacting && now - drawn < (fine ? FINE_IDLE_FRAME_MS : IDLE_FRAME_MS)) {
         raf = requestAnimationFrame(frame)
         return
       }
@@ -291,21 +373,32 @@ export default function MiniGlobe({ world, region, size = 112 }: Props) {
   }, [inScope, outScope, region, size, fine])
 
   return (
-    <Box
-      component="canvas"
-      ref={canvasRef}
-      aria-hidden
-      sx={{
-        width: size,
-        height: size,
-        display: 'block',
-        flex: 'none',
-        touchAction: 'none',
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-        WebkitTouchCallout: 'none',
-        filter: 'drop-shadow(0 10px 10px rgba(58,46,32,.25)) drop-shadow(0 2px 3px rgba(58,46,32,.18))',
-      }}
-    />
+    <Box sx={{ position: 'relative', width: size, height: size, flex: 'none' }}>
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          inset: 3,
+          borderRadius: '50%',
+          boxShadow: '0 10px 12px rgba(58,46,32,.22), 0 2px 3px rgba(58,46,32,.18)',
+        }}
+      />
+      <Box
+        component="canvas"
+        ref={canvasRef}
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          width: size,
+          height: size,
+          display: 'block',
+          touchAction: 'none',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none',
+        }}
+      />
+    </Box>
   )
 }
