@@ -22,6 +22,9 @@ const rise = (delayMs: number) => ({
   '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
 })
 
+const FRAME = 16
+const SUMMARY_W = 300
+
 const STATS: { kind: TargetKind; label: string }[] = [
   { kind: 'country', label: 'pays' },
   { kind: 'capital', label: 'capitales' },
@@ -74,24 +77,120 @@ function Bezel({ size }: { size: number }) {
   )
 }
 
+const needleSway = keyframes`
+  0%, 100% { transform: rotate(-7deg); }
+  50% { transform: rotate(9deg); }
+`
+
 function CompassStar() {
   return (
     <Box
       component="svg"
       viewBox="-50 -50 100 100"
       aria-hidden
-      sx={{ width: 72, height: 72, color: tokens.ink, opacity: 0.5 }}
+      sx={{ width: 92, height: 92, color: tokens.ink, opacity: 0.62, flex: 'none' }}
     >
-      <circle r="34" fill="none" stroke="currentColor" strokeWidth="1" />
-      <circle r="28" fill="none" stroke="currentColor" strokeWidth=".5" />
-      <path d="M0,-44 L7,-7 L0,0 Z M0,44 L-7,7 L0,0 Z M44,0 L7,7 L0,0 Z M-44,0 L-7,-7 L0,0 Z" fill="currentColor" />
-      <path
-        d="M0,-44 L-7,-7 L0,0 Z M0,44 L7,7 L0,0 Z M44,0 L7,-7 L0,0 Z M-44,0 L-7,7 L0,0 Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth=".8"
-      />
+      <circle r="45" fill="none" stroke="currentColor" strokeWidth=".5" />
+      <circle r="38" fill="none" stroke="currentColor" strokeWidth="1" />
+      <circle r="33" fill="none" stroke="currentColor" strokeWidth=".4" strokeDasharray="1 2" />
+      {Array.from({ length: 16 }, (_, i) => (
+        <line
+          key={i}
+          y1={-38}
+          y2={i % 2 ? -41 : -44}
+          transform={`rotate(${i * 22.5})`}
+          stroke="currentColor"
+          strokeWidth=".6"
+        />
+      ))}
       <path d="M0,0 L22,-22 M0,0 L-22,-22 M0,0 L22,22 M0,0 L-22,22" stroke="currentColor" strokeWidth=".6" />
+      <Box
+        component="g"
+        sx={{
+          transformOrigin: '0 0',
+          animation: `${needleSway} 9s ease-in-out infinite`,
+          '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+        }}
+      >
+        <path
+          d="M0,-36 L6.5,-6.5 L0,0 Z M0,36 L-6.5,6.5 L0,0 Z M36,0 L6.5,6.5 L0,0 Z M-36,0 L-6.5,-6.5 L0,0 Z"
+          fill="currentColor"
+        />
+        <path
+          d="M0,-36 L-6.5,-6.5 L0,0 Z M0,36 L6.5,6.5 L0,0 Z M36,0 L6.5,-6.5 L0,0 Z M-36,0 L-6.5,6.5 L0,0 Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth=".8"
+        />
+      </Box>
+      <text y="-47.5" textAnchor="middle" fontSize="8" fontStyle="italic" fill="currentColor" fontFamily={fontDisplay}>
+        N
+      </text>
+    </Box>
+  )
+}
+
+/** Échelle graphique à damier, sous la boussole. */
+function ScaleBar() {
+  const seg = 28
+  return (
+    <Box sx={{ color: tokens.ink }}>
+      <Box sx={{ display: 'flex', border: '1px solid currentColor', width: seg * 4, height: 7 }}>
+        {[0, 1, 2, 3].map((i) => (
+          <Box key={i} sx={{ flex: 1, background: i % 2 ? 'transparent' : 'currentColor' }} />
+        ))}
+      </Box>
+      <Box
+        sx={{
+          mt: 0.5,
+          display: 'flex',
+          justifyContent: 'space-between',
+          width: seg * 4,
+          fontSize: '0.62rem',
+          color: tokens.inkSoft,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        <span>0</span>
+        <span>1 000</span>
+        <span>2 000 km</span>
+      </Box>
+    </Box>
+  )
+}
+
+/** Cadre de carte : double filet, graduations de lisière sur les quatre côtés. */
+function Neatline({ inset }: { inset: number }) {
+  const tick = (axis: 'x' | 'y', step: number, major: number, len: number) => {
+    const dir = axis === 'x' ? 'to right' : 'to bottom'
+    const line = (c: string, every: number) =>
+      `repeating-linear-gradient(${dir}, ${c} 0 1px, transparent 1px ${every}px)`
+    return {
+      minor: line(tokens.hairSoft, step),
+      major: line(tokens.hair, major),
+      len,
+    }
+  }
+  const h = tick('x', 12, 60, 4)
+  const v = tick('y', 12, 60, 4)
+  const strip = (sx: object, minor: string, major: string, horizontal: boolean) => (
+    <>
+      <Box
+        sx={{ position: 'absolute', ...(horizontal ? { height: 4 } : { width: 4 }), backgroundImage: minor, ...sx }}
+      />
+      <Box
+        sx={{ position: 'absolute', ...(horizontal ? { height: 8 } : { width: 8 }), backgroundImage: major, ...sx }}
+      />
+    </>
+  )
+  const pad = 14
+  return (
+    <Box aria-hidden sx={{ position: 'absolute', inset, pointerEvents: 'none', border: `1px solid ${tokens.hair}` }}>
+      <Box sx={{ position: 'absolute', inset: 4, border: `1px solid ${tokens.hairSoft}` }} />
+      {strip({ top: 5, left: pad, right: pad }, h.minor, h.major, true)}
+      {strip({ bottom: 5, left: pad, right: pad }, h.minor, h.major, true)}
+      {strip({ left: 5, top: pad, bottom: pad }, v.minor, v.major, false)}
+      {strip({ right: 5, top: pad, bottom: pad }, v.minor, v.major, false)}
     </Box>
   )
 }
@@ -109,11 +208,14 @@ export default function DesktopHero({ world, region }: Props) {
 
   const sideBySide = w >= 780
   const textW = Math.min(480, Math.max(320, w * 0.4))
-  const ring = sideBySide ? Math.min(h * 0.94, (w - textW) * 1.1, 880) : Math.min(w * 1.02, h * 0.62, 760)
+  const padLeft = Math.min(88, Math.max(36, w * 0.052))
+  const ringFree = sideBySide ? Math.min(h * 0.94, (w - textW) * 1.1, 880) : Math.min(w * 1.02, h * 0.62, 760)
+  const ringBesideIndex = (w - padLeft - SUMMARY_W - 28) / 0.92
+  const showSummary = sideBySide && h >= 640 && Math.min(ringFree, ringBesideIndex) >= Math.min(h * 0.72, 560)
+  const ring = showSummary ? Math.min(ringFree, ringBesideIndex) : ringFree
   const globe = Math.max(0, ring / 1.17)
   const cx = sideBySide ? w - ring / 2 + ring * 0.08 : w / 2
   const cy = h - ring / 2 + ring * 0.1
-  const roomy = h >= 760
   return (
     <Box ref={ref} sx={{ position: 'relative', height: '100%', overflow: 'hidden' }}>
       <Box
@@ -170,69 +272,97 @@ export default function DesktopHero({ world, region }: Props) {
         >
           Devine les pays, les capitales, les courants marins et les vents sur une carte d’atlas.
         </Typography>
-        {roomy && sideBySide && (
-          <Box
-            sx={{
-              mt: 3,
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '10px 22px',
-              pt: 1.5,
-              borderTop: `1px solid ${tokens.hairSoft}`,
-              width: 'fit-content',
-              ...rise(260),
-            }}
-          >
-            {stats.map((s) => (
-              <Box key={s.kind} sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
-                <Typography sx={{ fontFamily: fontDisplay, fontSize: '1.7rem', fontWeight: 600, lineHeight: 1 }}>
-                  {s.n}
-                </Typography>
-                <Typography variant="overline" sx={{ color: tokens.inkSoft, fontSize: '0.64rem' }}>
+        {showSummary && (
+          <Box sx={{ mt: 3.5, width: SUMMARY_W, ...rise(260) }}>
+            <Typography variant="overline" sx={{ color: tokens.brick, display: 'block', mb: 0.5 }}>
+              Au sommaire
+            </Typography>
+            {stats.map((s, i) => (
+              <Box
+                key={s.kind}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: 1,
+                  py: 0.55,
+                  borderTop: `1px solid ${i === 0 ? tokens.hair : tokens.hairSoft}`,
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontFamily: fontDisplay,
+                    fontStyle: 'italic',
+                    fontSize: '1.25rem',
+                    lineHeight: 1.1,
+                    textTransform: 'capitalize',
+                  }}
+                >
                   {s.label}
+                </Typography>
+                <Box
+                  sx={{
+                    flex: 1,
+                    borderBottom: `1px dotted ${tokens.inkSoft}`,
+                    opacity: 0.6,
+                    transform: 'translateY(-3px)',
+                  }}
+                />
+                <Typography
+                  sx={{
+                    fontFamily: fontDisplay,
+                    fontSize: '1.5rem',
+                    fontWeight: 600,
+                    lineHeight: 1,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {s.n}
                 </Typography>
               </Box>
             ))}
+            <Box sx={{ borderTop: `1px solid ${tokens.hair}` }} />
           </Box>
         )}
       </Box>
 
-      {globe > 120 && (
-        <Box
-          sx={{
-            position: 'absolute',
-            left: cx - ring / 2,
-            top: cy - ring / 2,
-            width: ring,
-            height: ring,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            animation: `${fadeIn} 1100ms cubic-bezier(.2,.7,.2,1) 200ms backwards`,
-            '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
-          }}
-        >
-          <Bezel size={ring} />
-          <MiniGlobe world={world} region={region} size={Math.round(globe)} />
-        </Box>
-      )}
+      <Box sx={{ position: 'absolute', inset: 0, clipPath: `inset(${FRAME}px)` }}>
+        {globe > 120 && (
+          <Box
+            sx={{
+              position: 'absolute',
+              left: cx - ring / 2,
+              top: cy - ring / 2,
+              width: ring,
+              height: ring,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              animation: `${fadeIn} 1100ms cubic-bezier(.2,.7,.2,1) 200ms backwards`,
+              '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+            }}
+          >
+            <Bezel size={ring} />
+            <MiniGlobe world={world} region={region} size={Math.round(globe)} />
+          </Box>
+        )}
+      </Box>
 
-      {sideBySide && (
+      <Neatline inset={FRAME} />
+
+      {sideBySide && h >= 560 && (
         <Box
           sx={{
             position: 'absolute',
             left: 'clamp(36px, 5.2vw, 88px)',
-            bottom: 'clamp(24px, 4.5vh, 44px)',
+            bottom: 'clamp(30px, 5vh, 52px)',
             display: 'flex',
             alignItems: 'center',
-            gap: 1.75,
+            gap: 2.5,
             ...rise(340),
           }}
         >
           <CompassStar />
-          <Typography sx={{ fontStyle: 'italic', fontSize: '0.8rem', color: tokens.inkSoft, maxWidth: '22ch' }}>
-            Fais tourner le globe du bout du doigt ou à la souris.
-          </Typography>
+          <ScaleBar />
         </Box>
       )}
     </Box>
