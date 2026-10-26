@@ -111,6 +111,7 @@ function Bezel({ size }: { size: number }) {
 /** Lignes de rhumb rayonnant depuis le globe, comme sur une carte portulan. */
 function Rhumbs({ w, h, cx, cy, ring }: { w: number; h: number; cx: number; cy: number; ring: number }) {
   const long = Math.hypot(w, h)
+  const fade = `radial-gradient(circle at ${cx}px ${cy}px, #000 ${Math.round(ring * 0.6)}px, transparent ${Math.round(ring * 1.3)}px)`
   const roses = [
     { x: cx, y: cy, n: 32, o: 0.2 },
     { x: cx - ring * 0.95, y: cy - ring * 0.62, n: 16, o: 0.11 },
@@ -126,8 +127,8 @@ function Rhumbs({ w, h, cx, cy, ring }: { w: number; h: number; cx: number; cy: 
         inset: 0,
         pointerEvents: 'none',
         color: tokens.brick,
-        maskImage: 'linear-gradient(100deg, transparent 12%, #000 52%)',
-        WebkitMaskImage: 'linear-gradient(100deg, transparent 12%, #000 52%)',
+        maskImage: fade,
+        WebkitMaskImage: fade,
       }}
     >
       {roses.map((r, k) =>
@@ -333,7 +334,7 @@ export default function DesktopHero({ world, region }: Props) {
         sx={{
           position: 'absolute',
           inset: 0,
-          background: `radial-gradient(circle at ${cx}px ${cy}px, rgba(255,252,243,.95), rgba(243,234,212,0) ${Math.round(ring * 0.78)}px), linear-gradient(rgba(58,46,32,.04) 1px, transparent 1px) 0 0 / 100% 56px`,
+          background: `radial-gradient(circle at ${cx}px ${cy}px, rgba(255,252,243,.95), rgba(243,234,212,0) ${Math.round(ring * 0.78)}px)`,
           pointerEvents: 'none',
         }}
       />
@@ -373,32 +374,64 @@ export default function DesktopHero({ world, region }: Props) {
         }}
       >
         <Box ref={headRef} sx={{ width: 'fit-content', maxWidth: '100%' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, ...rise(0) }}>
-            <Box sx={{ width: 36, height: '1px', background: tokens.brick }} />
-            <Typography variant="overline" sx={{ color: tokens.brick }}>
-              Atlas de poche
-            </Typography>
-          </Box>
           <Typography
-            variant="h1"
             sx={{
-              mt: 1.25,
-              fontSize: 'clamp(3.4rem, min(7.4vw, 12.5vh), 7.4rem)',
-              lineHeight: 0.92,
-              letterSpacing: '-0.025em',
-              fontStyle: 'italic',
-              fontWeight: 500,
-              ...rise(80),
+              fontFamily: fontDisplay,
+              fontSize: 'clamp(0.78rem, 1.5vh, 0.95rem)',
+              fontWeight: 600,
+              letterSpacing: '0.34em',
+              textTransform: 'uppercase',
+              color: tokens.brick,
+              ...rise(0),
             }}
           >
-            Le Petit
-            <Box component="span" sx={{ display: 'block', pl: '0.9em', fontFamily: fontDisplay }}>
-              Atlas
+            Atlas de poche
+          </Typography>
+          <Typography variant="h1" sx={{ mt: 'clamp(10px, 2.2vh, 22px)', fontWeight: 500, lineHeight: 1, ...rise(80) }}>
+            <Box
+              component="span"
+              sx={{
+                display: 'block',
+                fontStyle: 'italic',
+                fontSize: 'clamp(1.9rem, min(3.4vw, 5.6vh), 3.4rem)',
+                letterSpacing: '0.01em',
+                color: tokens.inkSoft,
+                mb: '0.12em',
+              }}
+            >
+              Le Petit
+            </Box>
+            <Box
+              component="span"
+              sx={{
+                display: 'block',
+                fontSize: 'clamp(3.6rem, min(7.4vw, 13vh), 8.4rem)',
+                letterSpacing: '0.05em',
+                lineHeight: 0.9,
+                ml: '-0.04em',
+              }}
+            >
+              ATLAS
             </Box>
           </Typography>
+          <Box
+            aria-hidden
+            sx={{
+              mt: 'clamp(14px, 2.6vh, 26px)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              color: tokens.brick,
+              ...rise(140),
+            }}
+          >
+            <Box sx={{ width: 64, height: '1px', background: 'currentColor' }} />
+            <Box sx={{ width: 7, height: 7, transform: 'rotate(45deg)', border: '1px solid currentColor' }} />
+            <Box sx={{ width: 18, height: '1px', background: 'currentColor', opacity: 0.5 }} />
+          </Box>
           <Typography
             sx={{
-              mt: 2,
+              mt: 'clamp(12px, 2vh, 20px)',
               maxWidth: '24ch',
               fontFamily: fontDisplay,
               fontStyle: 'italic',
